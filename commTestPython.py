@@ -22,19 +22,18 @@ bipolar_bits = np.where(bits == 1, 1, -1)
 # Generate signals and compute PSDs
 
 signals = {
- 'Unipolar NRZ': generate_pulse_train('Unipolar NRZ', bits, bipolar_bits, samplesPerSymbol, alpha, span, BT),
- 'Polar NRZ': generate_pulse_train('Polar NRZ', bits, bipolar_bits, samplesPerSymbol, alpha, span, BT),
- 'Unipolar RZ': generate_pulse_train('Unipolar RZ', bits, bipolar_bits, samplesPerSymbol, alpha, span, BT),
- 'Manchester': generate_pulse_train('Manchester', bits, bipolar_bits, samplesPerSymbol, alpha, span, BT),
- 'Raised Cosine': generate_pulse_train('Raised Cosine', bits, bipolar_bits, samplesPerSymbol, alpha, span, BT),
- 'Root Raised Cosine': generate_pulse_train('Root Raised Cosine', bits, bipolar_bits, samplesPerSymbol, alpha, span, BT),
- 'Gaussian': generate_pulse_train('Gaussian', bits, bipolar_bits, samplesPerSymbol, alpha, span, BT)
+    'Unipolar NRZ': generate_pulse_train('Unipolar NRZ', bits, bipolar_bits, samplesPerSymbol, alpha, span, BT),
+    'Polar NRZ': generate_pulse_train('Polar NRZ', bits, bipolar_bits, samplesPerSymbol, alpha, span, BT),
+    'Unipolar RZ': generate_pulse_train('Unipolar RZ', bits, bipolar_bits, samplesPerSymbol, alpha, span, BT),
+    'Manchester': generate_pulse_train('Manchester', bits, bipolar_bits, samplesPerSymbol, alpha, span, BT),
+    'Raised Cosine': generate_pulse_train('Raised Cosine', bits, bipolar_bits, samplesPerSymbol, alpha, span, BT),
+    # 'Root Raised Cosine': generate_pulse_train('Root Raised Cosine', bits, bipolar_bits, samplesPerSymbol, alpha, span, BT),
+    'Gaussian': generate_pulse_train('Gaussian', bits, bipolar_bits, samplesPerSymbol, alpha, span, BT)
 }
 
 psd_data = {}
 for name, sig in signals.items():
-    # sig is now a tuple (pulse_train, time_vector)
-    freqs, psd = welch(sig[0], samplingFrequencyHz, nperseg=2048)
+    freqs, psd = welch(sig, samplingFrequencyHz, nperseg=2048)
     psd_data[name] = {'freqs': freqs / bitRate, 'psd': 10 * np.log10(psd)}
 
 plt.figure()
@@ -42,9 +41,8 @@ plt.figure()
 plt.subplot(2, 1, 1)
 t_plot = np.arange(8 * samplesPerSymbol) / samplingFrequencyHz # Show 8 bits
 offset = 0
-for name, (sig, time_vec) in signals.items(): # Unpack the tuple here
-    # Use the time_vec from the generate_pulse_train function
-    plt.plot(time_vec[:8*samplesPerSymbol], sig[:8*samplesPerSymbol] + offset, label=name)
+for name, sig in signals.items():
+    plt.plot(t_plot, sig[:8*samplesPerSymbol] + offset, label=name)
     offset -= 2.5 # Shift down for visibility
 plt.title('Pulse Shapes in Time Domain (Offset for comparison)')
 plt.xlabel('Time (s)')

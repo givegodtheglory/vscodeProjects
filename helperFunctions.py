@@ -101,57 +101,39 @@ def get_gauss_filter(BT, span, sps):
     h = np.exp(-t**2 / (2 * sigma**2))
     return h / np.sum(h)
 
-def generate_pulse_train(pulse_type, bits, bipolar_bits, sps, alpha, span, BT, total_duration_samples=None):
+def generate_pulse_train(pulse_type, bits, bipolar_bits, sps, alpha, span, BT):
     n_bits = len(bits)
-    
-    # Determine the length of the pulse train
-    if total_duration_samples is None:
-        total_samples = n_bits * sps
-    else:
-        total_samples = total_duration_samples
-
-    # Create a time vector for the generated pulse train
-    time_vector = np.arange(total_samples) / sps
-
     if pulse_type == 'Unipolar NRZ':
-        pulse_train = np.repeat(bits, sps)
+        return np.repeat(bits, sps)
     elif pulse_type == 'Polar NRZ':
-        pulse_train = np.repeat(bipolar_bits, sps)
+        return np.repeat(bipolar_bits, sps)
     elif pulse_type == 'Unipolar RZ':
         rz = np.zeros(n_bits * sps)
         for i, b in enumerate(bits):
             if b == 1:
                 rz[i*sps : i*sps + sps//2] = 1
-        pulse_train = rz
+        return rz
     elif pulse_type == 'Manchester':
         manchester = np.zeros(n_bits * sps)
         for i, b in enumerate(bits):
             if b == 1:
                 manchester[i*sps : i*sps + sps//2] = 1
                 manchester[i*sps + sps//2 : (i+1)*sps] = -1
-            else: # b == 0
+            else:
                 manchester[i*sps : i*sps + sps//2] = -1
                 manchester[i*sps + sps//2 : (i+1)*sps] = 1
-        pulse_train = manchester
+        return manchester
     elif pulse_type == 'Raised Cosine':
         upsampled = np.zeros(n_bits * sps)
         upsampled[::sps] = bipolar_bits
-        pulse_train = np.convolve(upsampled, get_rc_filter(alpha, span, sps), mode='same')
+        return np.convolve(upsampled, get_rc_filter(alpha, span, sps), mode='same')
     elif pulse_type == 'Root Raised Cosine':
         upsampled = np.zeros(n_bits * sps)
         upsampled[::sps] = bipolar_bits
-        pulse_train = np.convolve(upsampled, get_rrc_filter(alpha, span, sps), mode='same')
+        return np.convolve(upsampled, get_rrc_filter(alpha, span, sps), mode='same')
     elif pulse_type == 'Gaussian':
         upsampled = np.zeros(n_bits * sps)
         upsampled[::sps] = bipolar_bits
-        pulse_train = np.convolve(upsampled, get_gauss_filter(BT, span, sps), mode='same')
+        return np.convolve(upsampled, get_gauss_filter(BT, span, sps), mode='same')
     else:
         raise ValueError("Unknown pulse type")
-
-    # Trim or pad the pulse train to the desired total_samples
-    if len(pulse_train) > total_samples:
-        pulse_train = pulse_train[:total_samples]
-    elif len(pulse_train) < total_samples:
-        pulse_train = np.pad(pulse_train, (0, total_samples - len(pulse_train)), 'constant')
-
-    return pulse_train, time_vector
