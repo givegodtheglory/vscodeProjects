@@ -138,6 +138,9 @@ def generate_pulse_train(pulse_type, bits, bipolar_bits, sps, alpha, span, BT, s
     else:
         raise ValueError("Unknown pulse type")
 
+    # Normalize pulse_train to have a maximum amplitude of 1
+    pulse_train = pulse_train / np.max(np.abs(pulse_train)) if np.max(np.abs(pulse_train)) != 0 else pulse_train
+
     if total_signal_duration_seconds is not None and sampling_frequency_hz is not None:
         # If total_signal_duration_seconds is provided, extend or truncate the pulse_train
         # and create a time vector for the specified duration.
