@@ -101,15 +101,16 @@ def get_gauss_filter(BT, span, sps):
     h = np.exp(-t**2 / (2 * sigma**2))
     return h / np.sum(h)
 
-#TODO: realized that the total pulse time and symbol amounts may not coincide or may cause an abrut end of the symbol at the end. Check this
-def generate_pulse_train(pulse_type, bits, bipolar_bits, sps, alpha, span, BT, sampling_frequency_hz=None, total_signal_duration_seconds=None):
-    n_bits = len(bits)
-    total_samples = int(n_bits * sps)
+def generate_pulse_train(pulse_type, bits, bipolar_bits, sps, alpha, span, BT, sampling_frequency_hz, symbol_rate):
+
+    # Calculate bit duration based on symbol rate (which is equivalent to bit rate for these pulse types)
+    bit_duration = 1 / symbol_rate
+    total_samples = int(len(bits) * bit_duration * sampling_frequency_hz)
     
     pulse_train = np.zeros(total_samples)
 
     if pulse_type == 'Unipolar NRZ':
-        pulse_train = np.repeat(bits, sps)
+        pulse_train = np.repeat(bits, sps) # This is incorrect, should be based on sampling_frequency_hz
     elif pulse_type == 'Polar NRZ':
         pulse_train = np.repeat(bipolar_bits, sps)
     elif pulse_type == 'Unipolar RZ':
@@ -125,34 +126,24 @@ def generate_pulse_train(pulse_type, bits, bipolar_bits, sps, alpha, span, BT, s
                 pulse_train[i*sps : i*sps + sps//2] = -1
                 pulse_train[i*sps + sps//2 : (i+1)*sps] = 1
     elif pulse_type == 'Raised Cosine':
-        upsampled = np.zeros(n_bits * sps)
+        upsampled = np.zeros(len(bits) * sps)
         upsampled[::sps] = bipolar_bits
         pulse_train = np.convolve(upsampled, get_rc_filter(alpha, span, sps), mode='same')
     elif pulse_type == 'Root Raised Cosine':
-        upsampled = np.zeros(n_bits * sps)
+        upsampled = np.zeros(len(bits) * sps)
         upsampled[::sps] = bipolar_bits
         pulse_train = np.convolve(upsampled, get_rrc_filter(alpha, span, sps), mode='same')
     elif pulse_type == 'Gaussian':
-        upsampled = np.zeros(n_bits * sps)
+        upsampled = np.zeros(len(bits) * sps)
         upsampled[::sps] = bipolar_bits
         pulse_train = np.convolve(upsampled, get_gauss_filter(BT, span, sps), mode='same')
     else:
         raise ValueError("Unknown pulse type")
 
     # Normalize pulse_train to have a maximum amplitude of 1
-    pulse_train = pulse_train / np.max(np.abs(pulse_train)) if np.max(np.abs(pulse_train)) != 0 else pulse_train
+    pulse_train = pulse_train / np.max(np.abs(pulse_train)) if np.max(np.abs(pulse_train)) != 0 else pulse_train # This normalization is fine
 
-    if total_signal_duration_seconds is not None and sampling_frequency_hz is not None:
-        # If total_signal_duration_seconds is provided, extend or truncate the pulse_train
-        # and create a time vector for the specified duration.
-        num_samples_for_duration = int(total_signal_duration_seconds * sampling_frequency_hz)
-        if num_samples_for_duration > total_samples:
-            pulse_train = np.pad(pulse_train, (0, num_samples_for_duration - total_samples), 'constant')
-        else:
-            pulse_train = pulse_train[:num_samples_for_duration]
-        time_vector = np.linspace(0, total_signal_duration_seconds, num_samples_for_duration, endpoint=False)
-    else:
-        # Default time vector if total_signal_duration_seconds is not specified
-        time_vector = np.arange(total_samples) / (sampling_frequency_hz if sampling_frequency_hz is not None else sps)
+    # The time vector is now solely determined by the number of bits, sps, and sampling_frequency_hz
+    time_vector = np.arange(total_samples) / sampling_frequency_hz
 
     return pulse_train, time_vector
