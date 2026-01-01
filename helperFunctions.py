@@ -101,6 +101,7 @@ def get_gauss_filter(BT, span, sps):
     h = np.exp(-t**2 / (2 * sigma**2))
     return h / np.sum(h)
 
+#TODO: realized that the total pulse time and symbol amounts may not coincide or may cause an abrut end of the symbol at the end. Check this
 def generate_pulse_train(pulse_type, bits, bipolar_bits, sps, alpha, span, BT, sampling_frequency_hz=None, total_signal_duration_seconds=None):
     n_bits = len(bits)
     total_samples = int(n_bits * sps)
