@@ -1,15 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import welch
-from helperFunctions import get_gauss_filter, get_rc_filter, get_rrc_filter, generate_pulse_train
+from helperFunctions import generate_pulse_train
 
 # --- 1. Simulation Parameters ---
 numberOfSymbols = 10 # Large number of bits for smooth PSD
 symbolRate = 10      #Symbols per second 
 samplingFreqHz = 100
-
-samplesPerSymbol = samplingFreqHz/symbolRate     # Samples per symbol (oversampling factor)
-bitRate = samplingFreqHz / samplesPerSymbol        # Bit rate (bps)
 
 alpha = 0.35         # Rolloff factor for RC and RRC
 BT = 0.3             # Bandwidth-Time product for Gaussian pulse
@@ -23,8 +20,8 @@ bits = np.random.randint(0, 2, numberOfSymbols)
 bipolar_bits = np.where(bits == 1, 1, -1)
 
 #Generate the data pulse
-dataPulseTrain, t = generate_pulse_train('Polar NRZ', bits, bipolar_bits, samplesPerSymbol, alpha, span, BT, samplingFreqHz, symbolRate)
-print(bits[0:5])
+dataPulseTrain, t = generate_pulse_train('Polar NRZ', bits, symbolRate, alpha, span, BT, samplingFreqHz)
+print(bits[0:10])
 # Generate the time varying cosine angle argument
 fskFreqOffsetHz = 500
 modulatedFrequency = carrierFrequencyHz + (dataPulseTrain * fskFreqOffsetHz)
@@ -35,7 +32,7 @@ fskSignal = np.cos(angleArgument)
 
 plt.figure()
 plt.plot(t, dataPulseTrain)
-plt.xlim(0, 5*1/symbolRate) # Show first 5 symbols
+plt.xlim(0, 10*1/symbolRate) # Show first 5 symbols
 plt.show()
 
 # plt.figure(figsize=(10, 6))

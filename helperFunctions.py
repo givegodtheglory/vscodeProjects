@@ -16,16 +16,16 @@ def genNRZPulse(pulseWidthArg,totalPulseWidthArg, samplingFrequencyHz = 100):
     pulseWidth = pulseWidthArg #seconds
     totalPulseWidth = totalPulseWidthArg #seconds
 
-    numberOfActiveSamples = pulseWidth * samplingFrequencyHz
-    numberOfZeroSamples = samplingFrequencyHz*totalPulseWidth - numberOfActiveSamples
+    numberOfActiveSamples = int(pulseWidth * samplingFrequencyHz)
+    totalSamples = int(totalPulseWidth * samplingFrequencyHz)
+    numberOfZeroSamples = totalSamples - numberOfActiveSamples
 
-    timeVector = np.arange(-totalPulseWidth/2,totalPulseWidth/2, 1/samplingFrequencyHz)
-
-    activePulseSection = np.ones(int(numberOfActiveSamples))
+    activePulseSection = np.ones(numberOfActiveSamples)
     prefixZeroSection = np.zeros(int(numberOfZeroSamples/2))
-    trailingZeroSection = prefixZeroSection
+    trailingZeroSection = np.zeros(numberOfZeroSamples - len(prefixZeroSection))
 
     pulse = np.concatenate((prefixZeroSection, activePulseSection,trailingZeroSection))
+    timeVector = np.arange(len(pulse)) / samplingFrequencyHz - totalPulseWidth/2
 
     fftPulse = (np.fft.fft(pulse,12*len(pulse)))
     fftPulse = fftPulse/(12*len(pulse))
@@ -81,7 +81,7 @@ def get_rrc_filter(alpha, span, sps):
     for i, val in enumerate(t):
         if val == 0:
             h[i] = 1 - alpha + 4*alpha/np.pi
-        elif alpha != 0 and abs(val) == 1/(4*alpha):
+        elif alpha != 0 and np.isclose(abs(val), 1/(4*alpha)):
             h[i] = alpha/np.sqrt(2) * ((1+2/np.pi)*np.sin(np.pi/(4*alpha)) + (1-2/np.pi)*np.cos(np.pi/(4*alpha)))
         else:
             num = np.sin(np.pi*val*(1-alpha)) + 4*alpha*val*np.cos(np.pi*val*(1+alpha))
@@ -91,8 +91,14 @@ def get_rrc_filter(alpha, span, sps):
 
 def get_rc_filter(alpha, span, sps):
     t = np.arange(-span*sps//2, span*sps//2 + 1) / sps
-    # Handle the divide-by-zero cases in the RC formula
-    h = np.sinc(t) * np.cos(np.pi*alpha*t) / (1 - (2*alpha*t)**2 + 1e-10)
+    
+    with np.errstate(divide='ignore', invalid='ignore'):
+        h = np.sinc(t) * np.cos(np.pi*alpha*t) / (1 - (2*alpha*t)**2)
+    
+    # Handle singularities at t = +/- 1/(2*alpha) where the denominator is 0
+    if alpha != 0:
+        h[np.isclose(np.abs(t), 1/(2*alpha))] = (np.pi/4) * np.sinc(1/(2*alpha))
+
     return h / np.sum(h)
 
 def get_gauss_filter(BT, span, sps):
@@ -101,42 +107,41 @@ def get_gauss_filter(BT, span, sps):
     h = np.exp(-t**2 / (2 * sigma**2))
     return h / np.sum(h)
 
-def generate_pulse_train(pulse_type, bits, bipolar_bits, sps, alpha, span, BT, sampling_frequency_hz, symbol_rate):
+def generate_pulse_train(pulse_type, bits, symbolRate, alpha, span, BT, sampling_frequency_hz):
 
     # Calculate bit duration based on symbol rate (which is equivalent to bit rate for these pulse types)
-    bit_duration = 1 / symbol_rate
-    total_samples = int(len(bits) * bit_duration * sampling_frequency_hz)
-    
-    pulse_train = np.zeros(total_samples)
+    bipolar_bits = np.where(bits == 1, 1, -1)
+    samplesPerSymbol = int(sampling_frequency_hz/symbolRate)
+    pulse_train = np.zeros(samplesPerSymbol*len(bits))
 
     if pulse_type == 'Unipolar NRZ':
-        pulse_train = np.repeat(bits, sps) # This is incorrect, should be based on sampling_frequency_hz
+        pulse_train = np.repeat(bits, samplesPerSymbol)
     elif pulse_type == 'Polar NRZ':
-        pulse_train = np.repeat(bipolar_bits, sps)
+        pulse_train = np.repeat(bipolar_bits, samplesPerSymbol)
     elif pulse_type == 'Unipolar RZ':
         for i, b in enumerate(bits):
             if b == 1:
-                pulse_train[i*sps : i*sps + sps//2] = 1
+                pulse_train[i*samplesPerSymbol : i*samplesPerSymbol + samplesPerSymbol//2] = 1
     elif pulse_type == 'Manchester':
         for i, b in enumerate(bits):
             if b == 1:
-                pulse_train[i*sps : i*sps + sps//2] = 1
-                pulse_train[i*sps + sps//2 : (i+1)*sps] = -1
+                pulse_train[i*samplesPerSymbol : i*samplesPerSymbol + samplesPerSymbol//2] = 1
+                pulse_train[i*samplesPerSymbol + samplesPerSymbol//2 : (i+1)*samplesPerSymbol] = -1
             else:
-                pulse_train[i*sps : i*sps + sps//2] = -1
-                pulse_train[i*sps + sps//2 : (i+1)*sps] = 1
+                pulse_train[i*samplesPerSymbol : i*samplesPerSymbol + samplesPerSymbol//2] = -1
+                pulse_train[i*samplesPerSymbol + samplesPerSymbol//2 : (i+1)*samplesPerSymbol] = 1
     elif pulse_type == 'Raised Cosine':
-        upsampled = np.zeros(len(bits) * sps)
-        upsampled[::sps] = bipolar_bits
-        pulse_train = np.convolve(upsampled, get_rc_filter(alpha, span, sps), mode='same')
+        upsampled = np.zeros(len(bits) * samplesPerSymbol)
+        upsampled[::samplesPerSymbol] = bipolar_bits
+        pulse_train = np.convolve(upsampled, get_rc_filter(alpha, span, samplesPerSymbol), mode='same')
     elif pulse_type == 'Root Raised Cosine':
-        upsampled = np.zeros(len(bits) * sps)
-        upsampled[::sps] = bipolar_bits
-        pulse_train = np.convolve(upsampled, get_rrc_filter(alpha, span, sps), mode='same')
+        upsampled = np.zeros(len(bits) * samplesPerSymbol)
+        upsampled[::samplesPerSymbol] = bipolar_bits
+        pulse_train = np.convolve(upsampled, get_rrc_filter(alpha, span, samplesPerSymbol), mode='same')
     elif pulse_type == 'Gaussian':
-        upsampled = np.zeros(len(bits) * sps)
-        upsampled[::sps] = bipolar_bits
-        pulse_train = np.convolve(upsampled, get_gauss_filter(BT, span, sps), mode='same')
+        upsampled = np.zeros(len(bits) * samplesPerSymbol)
+        upsampled[::samplesPerSymbol] = bipolar_bits
+        pulse_train = np.convolve(upsampled, get_gauss_filter(BT, span, samplesPerSymbol), mode='same')
     else:
         raise ValueError("Unknown pulse type")
 
@@ -144,6 +149,6 @@ def generate_pulse_train(pulse_type, bits, bipolar_bits, sps, alpha, span, BT, s
     pulse_train = pulse_train / np.max(np.abs(pulse_train)) if np.max(np.abs(pulse_train)) != 0 else pulse_train # This normalization is fine
 
     # The time vector is now solely determined by the number of bits, sps, and sampling_frequency_hz
-    time_vector = np.arange(total_samples) / sampling_frequency_hz
-
+    #time_vector = np.arange(total_samples) / sampling_frequency_hz
+    time_vector = np.arange(len(pulse_train)) / sampling_frequency_hz
     return pulse_train, time_vector
