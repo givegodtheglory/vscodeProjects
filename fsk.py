@@ -6,13 +6,13 @@ from helperFunctions import generate_pulse_train
 # --- 1. Simulation Parameters ---
 numberOfSymbols = 10 # Large number of bits for smooth PSD
 symbolRate = 10      #Symbols per second 
-samplingFreqHz = 100
+samplingFreqHz = 10001
 
 alpha = 0.35         # Rolloff factor for RC and RRC
 BT = 0.3             # Bandwidth-Time product for Gaussian pulse
 span = 10            # Filter span in symbols
 
-carrierFrequencyHz = 1000
+carrierFrequencyHz = 100
 
 
 # Generate random data
@@ -21,18 +21,24 @@ bipolar_bits = np.where(bits == 1, 1, -1)
 
 #Generate the data pulse
 dataPulseTrain, t = generate_pulse_train('Polar NRZ', bits, symbolRate, alpha, span, BT, samplingFreqHz)
-print(bits[0:10])
+print(bits[0:5])
 # Generate the time varying cosine angle argument
-fskFreqOffsetHz = 500
+fskFreqOffsetHz = 50
 modulatedFrequency = carrierFrequencyHz + (dataPulseTrain * fskFreqOffsetHz)
 angleArgument = 2 * np.pi * modulatedFrequency * t
+
 
 fskSignal = np.cos(angleArgument)
 
 
-plt.figure()
-plt.plot(t, dataPulseTrain)
-plt.xlim(0, 10*1/symbolRate) # Show first 5 symbols
+plt.figure(figsize=(10, 6))
+plt.subplot(2, 1, 1)
+plt.plot(t, fskSignal, label='FSK Signal')
+plt.xlim(0, 5*1/symbolRate) # Show first few symbols
+plt.title('FSK Signal in Time Domain')
+plt.subplot(2, 1, 2)
+plt.plot(t, dataPulseTrain, label='Data Pulse Train')
+plt.xlim(0, 5*1/symbolRate) # Show first few symbols
 plt.show()
 
 # plt.figure(figsize=(10, 6))
