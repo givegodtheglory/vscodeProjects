@@ -134,14 +134,40 @@ def generate_pulse_train(pulse_type, bits, symbolRate, alpha, span, BT, sampling
         upsampled = np.zeros(len(bits) * samplesPerSymbol)
         upsampled[::samplesPerSymbol] = bipolar_bits
         pulse_train = np.convolve(upsampled, get_rc_filter(alpha, span, samplesPerSymbol), mode='same')
+        print(
+        "Warning: You are normalizing after filtering.\n"
+        "This means:\n"
+        "- RC/RRC/Gaussian pulses will not have the correct absolute amplitude\n"
+        "- But their shape is correct\n"
+        "- And normalization is often desirable for plotting anyway\n"
+        "If you need energy‑normalized pulses (e.g., for BER simulation), you should\n"
+        "normalize the filter itself, not the final pulse train.\n")
+
     elif pulse_type == 'Root Raised Cosine':
         upsampled = np.zeros(len(bits) * samplesPerSymbol)
         upsampled[::samplesPerSymbol] = bipolar_bits
         pulse_train = np.convolve(upsampled, get_rrc_filter(alpha, span, samplesPerSymbol), mode='same')
+        print(
+        "Warning: You are normalizing after filtering.\n"
+        "This means:\n"
+        "- RC/RRC/Gaussian pulses will not have the correct absolute amplitude\n"
+        "- But their shape is correct\n"
+        "- And normalization is often desirable for plotting anyway\n"
+        "If you need energy‑normalized pulses (e.g., for BER simulation), you should\n"
+        "normalize the filter itself, not the final pulse train.\n")
     elif pulse_type == 'Gaussian':
         upsampled = np.zeros(len(bits) * samplesPerSymbol)
         upsampled[::samplesPerSymbol] = bipolar_bits
         pulse_train = np.convolve(upsampled, get_gauss_filter(BT, span, samplesPerSymbol), mode='same')
+        print(
+        "Warning: You are normalizing after filtering.\n"
+        "This means:\n"
+        "- RC/RRC/Gaussian pulses will not have the correct absolute amplitude\n"
+        "- But their shape is correct\n"
+        "- And normalization is often desirable for plotting anyway\n"
+        "If you need energy‑normalized pulses (e.g., for BER simulation), you should\n"
+        "normalize the filter itself, not the final pulse train.\n")
+
     else:
         raise ValueError("Unknown pulse type")
 
@@ -151,4 +177,5 @@ def generate_pulse_train(pulse_type, bits, symbolRate, alpha, span, BT, sampling
     # The time vector is now solely determined by the number of bits, sps, and sampling_frequency_hz
     #time_vector = np.arange(total_samples) / sampling_frequency_hz
     time_vector = np.arange(len(pulse_train)) / sampling_frequency_hz
+
     return pulse_train, time_vector
