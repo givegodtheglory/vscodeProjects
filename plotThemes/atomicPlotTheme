@@ -1,0 +1,87 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import matplotlib.ticker as ticker
+
+def apply_atomic_age_theme():
+    # --- Color Palette (1950s Print) ---
+    paper_bg = '#f4f0e8'      # Yellowed document paper
+    ink_black = '#2b2b2b'     # Soft black (not pure #000)
+    pencil_grid = '#cfcfc4'   # Faint grey for grid
+    
+    # Retro accent colors
+    atomic_red = '#d23838'    # Warning Red
+    reactor_teal = '#008080'  # 50s Dashboard Teal
+    lead_grey = '#708090'     # Industrial Grey
+    
+    plt.rcParams.update({
+        # Backgrounds
+        'figure.facecolor': paper_bg,
+        'axes.facecolor': paper_bg,
+        'savefig.facecolor': paper_bg,
+        
+        # Typography (Typewriter style)
+        'font.family': 'monospace', # Courier / Typewriter
+        'font.weight': 'normal',
+        'text.color': ink_black,
+        'axes.labelcolor': ink_black,
+        'axes.titlecolor': ink_black,
+        'xtick.color': ink_black,
+        'ytick.color': ink_black,
+        
+        # Graph Paper Grid
+        'axes.grid': True,
+        'axes.grid.which': 'both', # Grid on major AND minor ticks
+        'grid.color': pencil_grid,
+        'grid.linestyle': '-',
+        'grid.linewidth': 0.8,
+        'grid.alpha': 1.0,         # Solid, visible lines
+        
+        # Borders (Thick Ink)
+        'axes.edgecolor': ink_black,
+        'axes.linewidth': 2.0,
+        
+        # Lines
+        'lines.linewidth': 2.5,
+        'lines.solid_capstyle': 'round',
+        'axes.prop_cycle': plt.cycler(color=[atomic_red, reactor_teal, lead_grey, ink_black])
+    })
+
+# --- Demo ---
+apply_atomic_age_theme()
+
+# Generate "Nuclear Physics" looking data
+x = np.linspace(0, 10, 100)
+decay = 100 * np.exp(-0.5 * x) # Exponential decay
+buildup = 100 * (1 - np.exp(-0.5 * x)) # Saturation curve
+
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Plot Lines
+ax.plot(x, decay, label='U-235 DECAY RATE')
+ax.plot(x, buildup, label='FISSION PRODUCT ACCUM.', linestyle='--')
+
+# --- The "Engineering Graph Paper" Trick ---
+# We turn on minor ticks to get that dense grid look
+ax.minorticks_on()
+# Customize the minor grid to be fainter
+ax.grid(which='minor', linestyle=':', linewidth=0.5, color='#dcdcdc')
+ax.grid(which='major', linestyle='-', linewidth=1.0, color='#bfbfbf')
+
+# Titles and Labels
+ax.set_title("FIGURE 1.A: CRITICALITY ESTIMATES", loc='left', fontsize=14, pad=20, weight='bold')
+ax.set_xlabel("TIME (MICROSECONDS)", fontsize=12)
+ax.set_ylabel("NEUTRON FLUX (%)", fontsize=12)
+
+# Add a "Stamp"
+plt.text(0.95, 0.95, "TOP SECRET\nEYES ONLY", 
+         transform=ax.transAxes, 
+         fontsize=12, color='#d23838', fontweight='bold',
+         ha='right', va='top', bbox=dict(facecolor='none', edgecolor='#d23838', boxstyle='round,pad=0.5'))
+
+# Legend
+legend = ax.legend(loc='center right', frameon=True)
+legend.get_frame().set_facecolor('#f4f0e8') # Match paper
+legend.get_frame().set_edgecolor('#2b2b2b') # Ink border
+
+plt.tight_layout()
+plt.show()
