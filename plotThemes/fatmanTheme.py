@@ -62,12 +62,12 @@ ax.plot(x, control_rod, label='ROD_POSITION', linestyle='--')
 
 # Styling
 ax.set_title(">> M-42 FAT MAN: LAUNCH PARAMETERS <<", fontweight='bold', pad=20)
-ax.set_xlabel("T-MINUS (SECONDS)")
-ax.set_ylabel("CRITICALITY (%)")
+ax.set_xlabel("TIME, SECONDS", fontweight='bold', fontsize=12)
+ax.set_ylabel("AMPLITUDE, dB", fontweight='bold', fontsize=12)
 
 # "Stencil" Box Annotation
 # This looks like a spray-painted warning on the side of the bomb
-ax.text(0.05, 0.9, "DANGER:\nEXPLOSIVE", 
+ax.text(0.7, 0.1, "FATMAN INDUSTRIES", 
         transform=ax.transAxes, 
         fontsize=12, color=ammo_crate_green, fontweight='bold',
         bbox=dict(facecolor=stencil_yellow, edgecolor=stencil_yellow, boxstyle='square,pad=0.4'))
