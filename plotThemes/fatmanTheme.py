@@ -1,82 +1,159 @@
-import matplotlib.pyplot as plt
 import numpy as np
-from cycler import cycler
+import matplotlib.pyplot as plt
+from matplotlib import cycler
 
-# --- Global Color Palette (Military Spec) ---
-ammo_crate_green = '#2e3b2b'  # Dark Olive Drab (Matte background)
-stencil_yellow = '#f0c808'    # Warning Label Yellow
-chalk_white = '#e0e0e0'       # Faded white (for main data)
-danger_red = '#ff3333'        # Critical Levels
-engraved_black = '#1a2118'    # Dark grid (looks like grooves in metal)
+# --- 1. THEME DEFINITION (Fat Man) ---
+AMMO_CRATE_GREEN = '#2e3b2b'
+STENCIL_YELLOW = '#f0c808'
+CHALK_WHITE = '#e0e0e0'
+DANGER_RED = '#ff3333'
+ENGRAVED_BLACK = '#1a2118'
 
 def apply_fatman_theme():
+    """Activates the M-42 Fat Man visual specification."""
     plt.rcParams.update({
-        # Backgrounds (Matte Metal)
-        'figure.facecolor': ammo_crate_green,
-        'axes.facecolor': ammo_crate_green,
-        'savefig.facecolor': ammo_crate_green,
-        
-        # Typography (Stencil/Warning Style)
+        'figure.facecolor': AMMO_CRATE_GREEN,
+        'axes.facecolor': AMMO_CRATE_GREEN,
+        'savefig.facecolor': AMMO_CRATE_GREEN,
         'font.family': 'monospace',
-        'font.weight': 'bold',        # Bold text mimics stencils
-        'font.size': 11,
-        'text.color': stencil_yellow,
-        'axes.labelcolor': stencil_yellow,
-        'axes.titlecolor': stencil_yellow,
-        'xtick.color': stencil_yellow,
-        'ytick.color': stencil_yellow,
-        
-        # The Grid (Engraved Look)
-        # We make the grid DARKER than the background
+        'font.weight': 'bold',
+        'font.size': 10,
+        'text.color': STENCIL_YELLOW,
+        'axes.labelcolor': STENCIL_YELLOW,
+        'axes.titlecolor': STENCIL_YELLOW,
+        'xtick.color': STENCIL_YELLOW,
+        'ytick.color': STENCIL_YELLOW,
         'axes.grid': True,
-        'grid.color': engraved_black,
+        'grid.color': ENGRAVED_BLACK,
         'grid.linestyle': '-',
         'grid.linewidth': 1.5,
         'grid.alpha': 0.6,
-        
-        # Borders (Heavy Industrial)
-        'axes.edgecolor': stencil_yellow,
+        'axes.edgecolor': STENCIL_YELLOW,
         'axes.linewidth': 2.5,
-        'axes.spines.top': True,     # Boxed in like a crate
+        'axes.spines.top': True,
         'axes.spines.right': True,
-        
-        # Data Lines (Chalk & Paint)
         'lines.linewidth': 3.0,
-        'axes.prop_cycle': cycler(color=[chalk_white, danger_red, stencil_yellow])
+        # Default cycle if no specific color is provided
+        'axes.prop_cycle': cycler(color=[CHALK_WHITE, DANGER_RED, STENCIL_YELLOW])
     })
 
-# --- Demo: Critical Mass Simulation ---
-apply_fatman_theme()
+# --- 2. THE ORGANIZER ---
+def auto_organize(xs, ys, layout, 
+                  titles=None,         # Subplot Titles (Top of graph)
+                  xtitles=None,        # X-Axis Labels
+                  ytitles=None,        # Y-Axis Labels
+                  legend_labels=None,  # Trace Names in Legend
+                  colors=None,         # Specific colors per trace
+                  linestyles=None,     # Line styles (e.g., '--', ':', '-')
+                  **kwargs):           # Global fallbacks
+    """
+    Organizes data lists into the plot structure.
+    All list arguments must match the order of the data in xs/ys.
+    """
+    structure = []
+    idx = 0
+    
+    for count in layout:
+        fig_list = []
+        for _ in range(count):
+            if idx < len(xs):
+                d = {'x': xs[idx], 'y': ys[idx]}
+                
+                # --- Map Lists to Individual Plots ---
+                if titles and idx < len(titles): d['title'] = titles[idx]
+                if xtitles and idx < len(xtitles): d['xlabel'] = xtitles[idx]
+                if ytitles and idx < len(ytitles): d['ylabel'] = ytitles[idx]
+                if legend_labels and idx < len(legend_labels): d['legend_label'] = legend_labels[idx]
+                if colors and idx < len(colors): d['color'] = colors[idx]
+                if linestyles and idx < len(linestyles): d['linestyle'] = linestyles[idx]
+                
+                # Apply global defaults for anything missing
+                for k, v in kwargs.items():
+                    if k not in d: d[k] = v
+                        
+                fig_list.append(d)
+                idx += 1
+        structure.append(fig_list)
+    return structure
 
-# Generate Data
-x = np.linspace(0, 10, 100)
-neutron_flux = 2 * np.exp(0.3 * x)          # Exponential growth
-control_rod = 50 * np.ones_like(x)          # Flat line
-control_rod[50:] = 50 - 3 * (x[50:] - 5)**2 # Rods dropping
+# --- 3. THE PLOTTER ---
+def plot_flex(figures_data, base_figsize=(10, 5), show=True):
+    """
+    Renders the figures. 
+    Returns a list of tuples: [(Figure, [Axes]), ...]
+    """
+    apply_fatman_theme()
+    created_figs = []
+    
+    for subplots_list in figures_data:
+        n = len(subplots_list)
+        # Create figure with dynamic height based on N subplots
+        fig, axes = plt.subplots(n, 1, figsize=(base_figsize[0], base_figsize[1] * n))
+        
+        # Ensure axes is always a list
+        if n == 1: axes = [axes]
+        
+        for ax, data in zip(axes, subplots_list):
+            # --- PLOT THE DATA ---
+            ax.plot(data['x'], data['y'], 
+                    label=data.get('legend_label'),
+                    color=data.get('color'),          # Uses specific color if provided
+                    linestyle=data.get('linestyle', '-') # Uses specific style if provided
+            )
+            
+            # --- APPLY LABELS (Uppercased) ---
+            if data.get('title'): ax.set_title(f">> {data['title'].upper()} <<", fontweight='bold' ,pad=20)
+            if data.get('xlabel'): ax.set_xlabel(data['xlabel'].upper(), fontweight='bold', fontsize=12)
+            if data.get('ylabel'): ax.set_ylabel(data['ylabel'].upper(), fontweight='bold', fontsize=12)
 
-fig, ax = plt.subplots(figsize=(10, 6))
+            # --- LEGEND ---
+            if data.get('legend_label'):
+                leg = ax.legend(frameon=True, loc='center right')
+                frame = leg.get_frame()
+                frame.set_facecolor(ENGRAVED_BLACK)
+                frame.set_edgecolor(STENCIL_YELLOW)
 
-# Plot
-ax.plot(x, neutron_flux, label='NEUTRON_FLUX')
-ax.plot(x, control_rod, label='ROD_POSITION', linestyle='--')
+            # --- BRANDING ---
+            ax.text(0.84, 0.1, "FATMAN INDUSTRIES", transform=ax.transAxes, 
+                    fontsize=9, color=AMMO_CRATE_GREEN, fontweight='bold',
+                    verticalalignment='top',
+                    bbox=dict(facecolor=STENCIL_YELLOW, edgecolor=STENCIL_YELLOW, boxstyle='square,pad=0.2'))
 
-# Styling
-ax.set_title(">> M-42 FAT MAN: LAUNCH PARAMETERS <<", fontweight='bold', pad=20)
-ax.set_xlabel("TIME, SECONDS", fontweight='bold', fontsize=12)
-ax.set_ylabel("AMPLITUDE, dB", fontweight='bold', fontsize=12)
+        fig.tight_layout()
+        created_figs.append((fig, axes))
 
-# "Stencil" Box Annotation
-# This looks like a spray-painted warning on the side of the bomb
-ax.text(0.7, 0.1, "FATMAN INDUSTRIES", 
-        transform=ax.transAxes, 
-        fontsize=12, color=ammo_crate_green, fontweight='bold',
-        bbox=dict(facecolor=stencil_yellow, edgecolor=stencil_yellow, boxstyle='square,pad=0.4'))
+    if show:
+        plt.show()
+    return created_figs
 
-# Legend (Dark background to pop against the olive)
-legend = ax.legend(frameon=True, loc='center right')
-frame = legend.get_frame()
-frame.set_facecolor(engraved_black)
-frame.set_edgecolor(stencil_yellow)
+# 1. Activate Theme
 
-plt.tight_layout()
-plt.show()
+
+# 2. Generate Dummy Data
+t = np.linspace(0, 10, 100)
+data_x = [t, t, t]
+data_y = [np.sin(t), np.cos(t), t**2 * 0.1]
+
+# 3. Define Attributes Lists (Order matches data_x/data_y)
+my_titles   = ["Primary Oscillator", "Harmonic Distortion", "Thermal Runaway"]
+my_legends  = ["OSC_ALPHA", "OSC_BETA", "TEMP_CRITICAL"]
+my_xtitles  = ["Time (ms)", "Time (ms)", "Time (s)"]
+my_ytitles  = ["Voltage (V)", "Voltage (V)", "Temp (C)"]
+my_colors   = [CHALK_WHITE, STENCIL_YELLOW, DANGER_RED]
+my_styles   = ['-', '--', ':']  # <--- Styles: Solid, Dashed, Dotted
+
+# 4. Organize
+figures = auto_organize(
+    data_x, 
+    data_y, 
+    layout=[2, 1],             # Window 1 has 2 plots, Window 2 has 1 plot
+    titles=my_titles,
+    xtitles=my_xtitles,
+    ytitles=my_ytitles,
+    legend_labels=my_legends,
+    colors=my_colors,
+    linestyles=my_styles       # <--- Passing the styles list
+)
+
+# 5. Plot
+plot_flex(figures)

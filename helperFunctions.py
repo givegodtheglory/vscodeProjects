@@ -104,9 +104,9 @@ def plot_flex(figures_data, base_figsize=(10, 5), show=True):
             )
             
             # --- APPLY LABELS (Uppercased) ---
-            if data.get('title'): ax.set_title(f">> {data['title']} <<", fontweight='bold' ,pad=20)
+            if data.get('title'): ax.set_title(f">> {data['title']} <<", fontweight='bold', fontsize=13, pad=20)
             if data.get('xlabel'): ax.set_xlabel(data['xlabel'], fontweight='bold', fontsize=12)
-            if data.get('ylabel'): ax.set_ylabel(data['ylabel'], fontweight='bold', fontsize=12)
+            if data.get('ylabel'): ax.set_ylabel(data['ylabel'], fontweight='bold', fontsize=12, labelpad=10)
 
             # --- LEGEND ---
             if data.get('legend_label'):
@@ -123,6 +123,7 @@ def plot_flex(figures_data, base_figsize=(10, 5), show=True):
 
         fig.tight_layout()
         created_figs.append((fig, axes))
+        plt.savefig("testPlot.png", dpi=600)
 
     if show:
         plt.show()

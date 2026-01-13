@@ -36,7 +36,7 @@ signals = {
 
 psd_data = {}
 for name, sig in signals.items():
- freqs, psd = welch(sig, samplingFreqHz, nperseg=4096)
+ freqs, psd = welch(sig, samplingFreqHz, nperseg=4096, return_onesided='True')
  psd_data[name] = {'freqs': freqs, 'psd': 10 * np.log10(psd)}
 
 plt.figure(figsize=(10, 6))
