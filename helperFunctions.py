@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 from cycler import cycler
 import matplotlib.patheffects as pe
+import os
 
 # --- 1. THEME DEFINITION (Fat Man) ---
 AMMO_CRATE_GREEN = '#2e3b2b'
@@ -123,6 +124,11 @@ def plot_flex(figures_data, base_figsize=(10, 5), show=True, fileName="iNeedAFil
 
         fig.tight_layout()
         created_figs.append((fig, axes))
+
+        filepath = "plots\\"+ fileName
+        if os.path.exists(filepath):
+            raise FileExistsError(f"{filepath} already exists!")
+
         plt.savefig("plots" +'\\'+ fileName, dpi=600)
 
     if show:
