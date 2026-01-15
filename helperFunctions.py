@@ -79,7 +79,7 @@ def auto_organize(xs, ys, layout,
     return structure
 
 # --- 3. THE PLOTTER ---
-def plot_flex(figures_data, base_figsize=(10, 5), show=True):
+def plot_flex(figures_data, base_figsize=(10, 5), show=True, fileName="iNeedAFileName.png"):
     """
     Renders the figures. 
     Returns a list of tuples: [(Figure, [Axes]), ...]
@@ -123,7 +123,7 @@ def plot_flex(figures_data, base_figsize=(10, 5), show=True):
 
         fig.tight_layout()
         created_figs.append((fig, axes))
-        plt.savefig("testPlot.png", dpi=600)
+        plt.savefig(fileName, dpi=600)
 
     if show:
         plt.show()
