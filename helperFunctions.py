@@ -116,14 +116,14 @@ def plot_flex(figures_data, base_figsize=(10, 5), show=True, fileName="iNeedAFil
                 frame.set_edgecolor(STENCIL_YELLOW)
 
             # --- BRANDING ---
-            ax.text(0.84, 0.1, "FATMAN INDUSTRIES", transform=ax.transAxes, 
+            ax.text(0.84, 0.1, "JUPITER INDUSTRIES", transform=ax.transAxes, 
                     fontsize=9, color=AMMO_CRATE_GREEN, fontweight='bold',
                     verticalalignment='top',
                     bbox=dict(facecolor=STENCIL_YELLOW, edgecolor=STENCIL_YELLOW, boxstyle='square,pad=0.2'))
 
         fig.tight_layout()
         created_figs.append((fig, axes))
-        plt.savefig(fileName, dpi=600)
+        plt.savefig("plots" +'\\'+ fileName, dpi=600)
 
     if show:
         plt.show()
