@@ -22,7 +22,6 @@ my_ytitles  = ["Voltage (V)"]
 my_colors   = [CHALK_WHITE]
 my_styles   = ['-']  # <--- Styles: Solid, Dashed, Dotted
 
-
 # 4. Organize
 figures = auto_organize(
     data_x, 
@@ -34,8 +33,8 @@ figures = auto_organize(
     legend_labels=my_legends,
     colors=my_colors,
     linestyles=my_styles,
-           # <--- Passing the styles list
-)
+    legend_locs=[[[0.85,0.12]]],
+    jupiter_locs=[["lower right"]])
 
 # 5. Plot
-plot_flex(figures,fileName="trash7.png")
+plot_flex(figures,fileName="sineWave.png")
