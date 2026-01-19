@@ -60,7 +60,9 @@ def apply_fatman_theme():
 def auto_organize(xs, ys, layout, 
                   titles=None, legend_labels=None, 
                   xtitles=None, ytitles=None, 
-                  colors=None, linestyles=None, **kwargs):
+                  colors=None, linestyles=None, 
+                  legend_locs=None, jupiter_locs=None, # <--- NEW ARGUMENTS
+                  **kwargs):
     """
     layout: A LIST OF LISTS.
             Outer List = Separate Figures (Windows).
@@ -74,14 +76,24 @@ def auto_organize(xs, ys, layout,
     structure = []
     global_idx = 0
     
-    # Iterate through WINDOWS (Outer List)
-    for fig_layout in layout:
+    # Iterate through WINDOWS (Outer List) using enumerate to get w_idx
+    for w_idx, fig_layout in enumerate(layout):
         figure_payload = []
         
-        # Iterate through SUBPLOTS (Inner List)
-        for trace_count in fig_layout:
+        # Iterate through SUBPLOTS (Inner List) using enumerate to get s_idx
+        for s_idx, trace_count in enumerate(fig_layout):
             subplot_traces = []
             
+            # --- 1. DETERMINE LOCATIONS FOR THIS SUBPLOT ---
+            # We check if the lists exist and match the current indices
+            curr_leg_loc = None
+            if legend_locs and w_idx < len(legend_locs) and s_idx < len(legend_locs[w_idx]):
+                curr_leg_loc = legend_locs[w_idx][s_idx]
+
+            curr_jup_loc = None
+            if jupiter_locs and w_idx < len(jupiter_locs) and s_idx < len(jupiter_locs[w_idx]):
+                curr_jup_loc = jupiter_locs[w_idx][s_idx]
+
             # Iterate through TRACES (Integer Value)
             for _ in range(trace_count):
                 if global_idx < len(xs):
@@ -95,6 +107,10 @@ def auto_organize(xs, ys, layout,
                     if colors and global_idx < len(colors): d['color'] = colors[global_idx]
                     if linestyles and global_idx < len(linestyles): d['linestyle'] = linestyles[global_idx]
                     
+                    # --- 2. INJECT LOCATIONS INTO TRACE DATA ---
+                    if curr_leg_loc: d['legend_loc'] = curr_leg_loc
+                    if curr_jup_loc: d['jupiter_loc'] = curr_jup_loc
+
                     # Apply defaults
                     for k, v in kwargs.items():
                         if k not in d: d[k] = v
@@ -106,11 +122,19 @@ def auto_organize(xs, ys, layout,
         
     return structure
 
-# --- 3. THE PLOTTER (UPDATED FOR MULTI-WINDOW) ---
-def plot_flex(figures_data, base_figsize=(10, 5), show=True, fileName="FatManPlot"):
+
+import matplotlib.pyplot as plt
+import os
+
+# --- 3. THE PLOTTER (RENAMED TO MATPLOTLIB STYLE) ---
+def plot_flex(figures_data, base_figsize=(10, 5), show=True, fileName="FatManPlot", 
+              legend_loc='upper right', logo_loc='upper left'):
     """
-    Renders multiple figures if detected.
-    If multiple windows are generated, fileName is appended with _0, _1, etc.
+    Renders multiple figures.
+    
+    Args:
+        legend_loc: 'upper right', 'lower left', 'center', (0.5, 0.5), etc.
+        logo_loc:   'upper left', 'lower right', 'center', (0.1, 0.9), etc.
     """
     apply_fatman_theme()
     created_figs = []
@@ -118,26 +142,58 @@ def plot_flex(figures_data, base_figsize=(10, 5), show=True, fileName="FatManPlo
     if not os.path.exists("plots"):
         os.makedirs("plots")
 
-    # Iterate through FIGURES (Windows)
+    # --- LOCATION LOGIC (MATPLOTLIB STYLE) ---
+    def get_logo_pos(loc_arg):
+        # Map standard Matplotlib strings to explicit coordinates/alignment
+        # Note: 'upper' vs 'top', 'lower' vs 'bottom'
+        presets = {
+            'upper left':   {'x': 0.02, 'y': 0.95, 'ha': 'left',  'va': 'top'},
+            'upper right':  {'x': 0.98, 'y': 0.95, 'ha': 'right', 'va': 'top'},
+            'lower left':   {'x': 0.02, 'y': 0.05, 'ha': 'left',  'va': 'bottom'},
+            'lower right':  {'x': 0.98, 'y': 0.05, 'ha': 'right', 'va': 'bottom'},
+            'center':       {'x': 0.50, 'y': 0.50, 'ha': 'center','va': 'center'},
+            # Legacy support (optional, just in case)
+            'top left':     {'x': 0.02, 'y': 0.95, 'ha': 'left',  'va': 'top'},
+            'top right':    {'x': 0.98, 'y': 0.95, 'ha': 'right', 'va': 'top'},
+            'bottom left':  {'x': 0.02, 'y': 0.05, 'ha': 'left',  'va': 'bottom'},
+            'bottom right': {'x': 0.98, 'y': 0.05, 'ha': 'right', 'va': 'bottom'}
+        }
+        
+        # Handle Tuple/Decimal Input
+        if isinstance(loc_arg, (tuple, list)) and len(loc_arg) == 2:
+            x, y = loc_arg
+            ha = 'right' if x > 0.5 else 'left'
+            va = 'top' if y > 0.5 else 'bottom'
+            return {'x': x, 'y': y, 'ha': ha, 'va': va}
+            
+        # Default to upper left if key not found
+        return presets.get(loc_arg, presets['upper left'])
+
+    # Iterate through FIGURES
     for fig_idx, subplots_list in enumerate(figures_data):
-        n = len(subplots_list) # Number of rows (stacked subplots)
+        n = len(subplots_list) 
         
-        # Create Figure
         fig, axes = plt.subplots(n, 1, figsize=(base_figsize[0], base_figsize[1] * n))
-        if n == 1: axes = [axes] # Ensure iterable
+        if n == 1: axes = [axes] 
         
-        # Iterate through SUBPLOTS (Rows)
+        # Iterate through SUBPLOTS
         for ax, trace_list in zip(axes, subplots_list):
             
-            # Iterate through TRACES (Overlays)
+            # --- 1. DETECT OVERRIDES ---
+            first_trace = trace_list[0]
+            
+            # Use 'logo_loc' to match new naming convention
+            # Fallback checks 'jupiter_loc' for backward compatibility with your organizer
+            active_legend_loc = first_trace.get('legend_loc', legend_loc)
+            active_logo_loc = first_trace.get('logo_loc', first_trace.get('jupiter_loc', logo_loc))
+
+            # Draw Traces
             for data in trace_list:
                 ax.plot(data['x'], data['y'], 
                         label=data.get('legend_label'),
                         color=data.get('color'),
                         linestyle=data.get('linestyle', '-')
                 )
-                
-                # Labels (Prioritize explicit ones)
                 if data.get('title'): ax.set_title(f">> {data['title']} <<", fontweight='bold', fontsize=13, pad=20)
                 if data.get('xlabel'): ax.set_xlabel(data['xlabel'], fontweight='bold', fontsize=12)
                 if data.get('ylabel'): ax.set_ylabel(data['ylabel'], fontweight='bold', fontsize=12, labelpad=10)
@@ -145,33 +201,31 @@ def plot_flex(figures_data, base_figsize=(10, 5), show=True, fileName="FatManPlo
             # --- STYLING ---
             handles, labels = ax.get_legend_handles_labels()
             if labels:
-                leg = ax.legend(frameon=True, loc='upper right')
+                leg = ax.legend(frameon=True, loc=active_legend_loc)
                 leg.get_frame().set_facecolor(ENGRAVED_BLACK)
                 leg.get_frame().set_edgecolor(STENCIL_YELLOW)
 
-            ax.text(0.02, 0.95, "JUPITER INDUSTRIES", transform=ax.transAxes, 
+            # --- JUPITER LOGO ---
+            l_pos = get_logo_pos(active_logo_loc)
+            ax.text(l_pos['x'], l_pos['y'], "JUPITER INDUSTRIES", transform=ax.transAxes, 
                     fontsize=9, color=AMMO_CRATE_GREEN, fontweight='bold',
-                    verticalalignment='top',
+                    verticalalignment=l_pos['va'],
+                    horizontalalignment=l_pos['ha'],
                     bbox=dict(facecolor=STENCIL_YELLOW, edgecolor=STENCIL_YELLOW, boxstyle='square,pad=0.2'))
 
         fig.tight_layout()
         created_figs.append((fig, axes))
-        # --- SAVE PATH LOGIC ---
-        # Handle auto-numbering for multiple windows
+        
+        # Save logic (omitted for brevity, same as before)
         if len(figures_data) > 1:
             clean_name = fileName.replace(".png", "")
             save_path = os.path.join("plots", f"{clean_name}_{fig_idx}.png")
         else:
             save_path = os.path.join("plots", fileName if fileName.endswith(".png") else f"{fileName}.png")
-            
-        # --- SAFETY CHECK ---
-        if os.path.exists(save_path):
-            raise FileExistsError(f"\n[!] STOP: The file '{save_path}' already exists. Change 'fileName' or delete the old file.")
-
+        if os.path.exists(save_path): raise FileExistsError(f"File '{save_path}' exists.")
         plt.savefig(save_path, dpi=600)
 
-    if show:
-        plt.show()
+    if show: plt.show()
     return created_figs
 
 def plot(xArg, yArg, xAxisTitle=0, yAxisTitle=0, plotTitle=0):
