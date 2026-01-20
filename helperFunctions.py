@@ -219,7 +219,7 @@ def plot_flex(figures_data, base_figsize=(10, 5), show=True, fileName="FatManPlo
         
         path = os.path.join("plots", f"{fileName.replace('.png','')}_{fig_idx}.png" if len(figures_data)>1 else f"{fileName.replace('.png','')}.png")
         if os.path.exists(path): raise FileExistsError(f"File {path} exists.")
-        plt.savefig(path, dpi=600)
+        plt.savefig(path, dpi=1000)
 
     if show: plt.show()
     return created_figs
