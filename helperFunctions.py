@@ -56,50 +56,50 @@ def apply_fatman_theme():
         'axes.prop_cycle': cycler(color=[CHALK_WHITE, DANGER_RED, STENCIL_YELLOW])
     })
 
-# --- 2. THE ORGANIZER (UPDATED FOR WINDOWS + STACKS + OVERLAYS) ---
+# --- 1. THE ORGANIZER ---
 def auto_organize(xs, ys, layout, 
                   titles=None, legend_labels=None, 
                   xtitles=None, ytitles=None, 
                   colors=None, linestyles=None, 
-                  legend_locs=None, jupiter_locs=None, # <--- NEW ARGUMENTS
+                  legend_locs=None, logo_locs=None,
+                  xlims=None, ylims=None,
+                  plot_types=None,
                   **kwargs):
-    """
-    layout: A LIST OF LISTS.
-            Outer List = Separate Figures (Windows).
-            Inner List = Stacked Subplots within that Window.
-            Integer    = Number of Traces overlaid on that Subplot.
-            
-            Example: [[3], [1, 1]]
-            Figure 1: 1 Subplot with 3 traces overlaid.
-            Figure 2: 2 Subplots stacked, 1 trace on each.
-    """
+    
     structure = []
     global_idx = 0
     
-    # Iterate through WINDOWS (Outer List) using enumerate to get w_idx
+    # Helper: Universal Prop Extractor
+    def get_nested_prop(source_list, w_idx, s_idx, t_idx, g_idx):
+        if not source_list: return None
+        try:
+            val = source_list[w_idx][s_idx]
+            if isinstance(val, list): return val[t_idx] 
+            elif isinstance(val, str) and t_idx == 0: return val 
+        except (IndexError, TypeError): pass
+
+        try:
+            val = source_list[w_idx][s_idx]
+            if isinstance(val, str): return val
+        except (IndexError, TypeError): pass
+
+        if g_idx < len(source_list): return source_list[g_idx]
+        return None
+
     for w_idx, fig_layout in enumerate(layout):
         figure_payload = []
-        
-        # Iterate through SUBPLOTS (Inner List) using enumerate to get s_idx
         for s_idx, trace_count in enumerate(fig_layout):
             subplot_traces = []
             
-            # --- 1. DETERMINE LOCATIONS FOR THIS SUBPLOT ---
-            # We check if the lists exist and match the current indices
-            curr_leg_loc = None
-            if legend_locs and w_idx < len(legend_locs) and s_idx < len(legend_locs[w_idx]):
-                curr_leg_loc = legend_locs[w_idx][s_idx]
+            curr_leg = legend_locs[w_idx][s_idx] if (legend_locs and w_idx < len(legend_locs) and s_idx < len(legend_locs[w_idx])) else None
+            curr_logo = logo_locs[w_idx][s_idx] if (logo_locs and w_idx < len(logo_locs) and s_idx < len(logo_locs[w_idx])) else None
+            curr_xlim = xlims[w_idx][s_idx] if (xlims and w_idx < len(xlims) and s_idx < len(xlims[w_idx])) else None
+            curr_ylim = ylims[w_idx][s_idx] if (ylims and w_idx < len(ylims) and s_idx < len(ylims[w_idx])) else None
 
-            curr_jup_loc = None
-            if jupiter_locs and w_idx < len(jupiter_locs) and s_idx < len(jupiter_locs[w_idx]):
-                curr_jup_loc = jupiter_locs[w_idx][s_idx]
-
-            # Iterate through TRACES (Integer Value)
-            for _ in range(trace_count):
+            for t_idx in range(trace_count):
                 if global_idx < len(xs):
                     d = {'x': xs[global_idx], 'y': ys[global_idx]}
                     
-                    # Map metadata using the global index
                     if titles and global_idx < len(titles): d['title'] = titles[global_idx]
                     if xtitles and global_idx < len(xtitles): d['xlabel'] = xtitles[global_idx]
                     if ytitles and global_idx < len(ytitles): d['ylabel'] = ytitles[global_idx]
@@ -107,123 +107,119 @@ def auto_organize(xs, ys, layout,
                     if colors and global_idx < len(colors): d['color'] = colors[global_idx]
                     if linestyles and global_idx < len(linestyles): d['linestyle'] = linestyles[global_idx]
                     
-                    # --- 2. INJECT LOCATIONS INTO TRACE DATA ---
-                    if curr_leg_loc: d['legend_loc'] = curr_leg_loc
-                    if curr_jup_loc: d['jupiter_loc'] = curr_jup_loc
-
-                    # Apply defaults
+                    found_type = get_nested_prop(plot_types, w_idx, s_idx, t_idx, global_idx)
+                    d['type'] = found_type if found_type else 'line'
+                    
+                    if curr_leg: d['legend_loc'] = curr_leg
+                    if curr_logo: d['logo_loc'] = curr_logo
+                    if curr_xlim: d['xlim'] = curr_xlim
+                    if curr_ylim: d['ylim'] = curr_ylim
+                    
                     for k, v in kwargs.items():
                         if k not in d: d[k] = v
-                            
+
                     subplot_traces.append(d)
                     global_idx += 1
             figure_payload.append(subplot_traces)
         structure.append(figure_payload)
-        
     return structure
 
 
-import matplotlib.pyplot as plt
-import os
-
-# --- 3. THE PLOTTER (RENAMED TO MATPLOTLIB STYLE) ---
+# --- 2. THE PLOTTER ---
 def plot_flex(figures_data, base_figsize=(10, 5), show=True, fileName="FatManPlot", 
               legend_loc='upper right', logo_loc='upper left'):
-    """
-    Renders multiple figures.
     
-    Args:
-        legend_loc: 'upper right', 'lower left', 'center', (0.5, 0.5), etc.
-        logo_loc:   'upper left', 'lower right', 'center', (0.1, 0.9), etc.
-    """
-    apply_fatman_theme()
+    if 'apply_fatman_theme' in globals(): globals()['apply_fatman_theme']()
+    if not os.path.exists("plots"): os.makedirs("plots")
+    
     created_figs = []
-    
-    if not os.path.exists("plots"):
-        os.makedirs("plots")
 
-    # --- LOCATION LOGIC (MATPLOTLIB STYLE) ---
     def get_logo_pos(loc_arg):
-        # Map standard Matplotlib strings to explicit coordinates/alignment
-        # Note: 'upper' vs 'top', 'lower' vs 'bottom'
-        presets = {
-            'upper left':   {'x': 0.02, 'y': 0.95, 'ha': 'left',  'va': 'top'},
-            'upper right':  {'x': 0.98, 'y': 0.95, 'ha': 'right', 'va': 'top'},
-            'lower left':   {'x': 0.02, 'y': 0.05, 'ha': 'left',  'va': 'bottom'},
-            'lower right':  {'x': 0.98, 'y': 0.05, 'ha': 'right', 'va': 'bottom'},
-            'center':       {'x': 0.50, 'y': 0.50, 'ha': 'center','va': 'center'},
-            # Legacy support (optional, just in case)
-            'top left':     {'x': 0.02, 'y': 0.95, 'ha': 'left',  'va': 'top'},
-            'top right':    {'x': 0.98, 'y': 0.95, 'ha': 'right', 'va': 'top'},
-            'bottom left':  {'x': 0.02, 'y': 0.05, 'ha': 'left',  'va': 'bottom'},
-            'bottom right': {'x': 0.98, 'y': 0.05, 'ha': 'right', 'va': 'bottom'}
-        }
-        
-        # Handle Tuple/Decimal Input
+        presets = {'upper left': {'x':0.02,'y':0.95,'ha':'left','va':'top'},
+                   'upper right':{'x':0.98,'y':0.95,'ha':'right','va':'top'},
+                   'lower left': {'x':0.02,'y':0.05,'ha':'left','va':'bottom'},
+                   'lower right':{'x':0.98,'y':0.05,'ha':'right','va':'bottom'}}
         if isinstance(loc_arg, (tuple, list)) and len(loc_arg) == 2:
-            x, y = loc_arg
-            ha = 'right' if x > 0.5 else 'left'
-            va = 'top' if y > 0.5 else 'bottom'
-            return {'x': x, 'y': y, 'ha': ha, 'va': va}
-            
-        # Default to upper left if key not found
+            return {'x':loc_arg[0], 'y':loc_arg[1], 'ha':'left', 'va':'top'}
         return presets.get(loc_arg, presets['upper left'])
 
-    # Iterate through FIGURES
     for fig_idx, subplots_list in enumerate(figures_data):
-        n = len(subplots_list) 
-        
+        n = len(subplots_list)
         fig, axes = plt.subplots(n, 1, figsize=(base_figsize[0], base_figsize[1] * n))
-        if n == 1: axes = [axes] 
-        
-        # Iterate through SUBPLOTS
+        if n == 1: axes = [axes]
+
         for ax, trace_list in zip(axes, subplots_list):
-            
-            # --- 1. DETECT OVERRIDES ---
-            first_trace = trace_list[0]
-            
-            # Use 'logo_loc' to match new naming convention
-            # Fallback checks 'jupiter_loc' for backward compatibility with your organizer
-            active_legend_loc = first_trace.get('legend_loc', legend_loc)
-            active_logo_loc = first_trace.get('logo_loc', first_trace.get('jupiter_loc', logo_loc))
+            first = trace_list[0]
+            if first.get('xlim'): ax.set_xlim(first['xlim'])
+            if first.get('ylim'): ax.set_ylim(first['ylim'])
+            act_leg = first.get('legend_loc', legend_loc)
+            act_logo = first.get('logo_loc', logo_loc)
 
-            # Draw Traces
             for data in trace_list:
-                ax.plot(data['x'], data['y'], 
-                        label=data.get('legend_label'),
-                        color=data.get('color'),
-                        linestyle=data.get('linestyle', '-')
-                )
-                if data.get('title'): ax.set_title(f">> {data['title']} <<", fontweight='bold', fontsize=13, pad=20)
-                if data.get('xlabel'): ax.set_xlabel(data['xlabel'], fontweight='bold', fontsize=12)
-                if data.get('ylabel'): ax.set_ylabel(data['ylabel'], fontweight='bold', fontsize=12, labelpad=10)
+                raw = data.get('type', 'line')
+                if isinstance(raw, list): raw = raw[0]
+                p_type = str(raw).lower().strip()
+                
+                col = data.get('color')
+                lbl = data.get('legend_label')
+                
+                print(f"[DEBUG] Drawing '{p_type}' for label: {lbl}")
 
-            # --- STYLING ---
-            handles, labels = ax.get_legend_handles_labels()
-            if labels:
-                leg = ax.legend(frameon=True, loc=active_legend_loc)
+                if p_type == 'scatter':
+                    ax.scatter(data['x'], data['y'], label=lbl, color=col, s=20, alpha=0.9)
+                
+                elif p_type == 'stem':
+                    use_col = col if col else STENCIL_YELLOW 
+                    marker, stemlines, baseline = ax.stem(data['x'], data['y'], 
+                                                          linefmt=use_col, markerfmt='o',
+                                                          label=lbl, basefmt=" ")
+                    plt.setp(stemlines, color=use_col, linewidth=1.5)
+                    plt.setp(marker, color=use_col, markerfacecolor=use_col, markeredgecolor=use_col, markersize=6)
+                    plt.setp(baseline, visible=False)
+
+                # --- [NEW] DIGITAL PLOT (Stem + Step) ---
+                elif p_type == 'digital':
+                    use_col = col if col else STENCIL_YELLOW
+                    
+                    # 1. Draw the Step (The Horizontal Connection)
+                    # where='post' means the line goes horizontal, then vertical (classic digital look)
+                    ax.step(data['x'], data['y'], color=use_col, where='post', linewidth=1.5, label=lbl)
+                    
+                    # 2. Draw the Stems (The Vertical Drops)
+                    marker, stemlines, baseline = ax.stem(data['x'], data['y'], 
+                                                          linefmt=use_col, markerfmt='o',
+                                                          basefmt=" ") # No label here to avoid double legend
+                    
+                    plt.setp(stemlines, color=use_col, linewidth=1.5)
+                    plt.setp(marker, color=use_col, markerfacecolor=use_col, markeredgecolor=use_col, markersize=6)
+                    plt.setp(baseline, visible=False)
+
+                elif p_type == 'step':
+                    ax.step(data['x'], data['y'], label=lbl, color=col, where='post', linewidth=1.5)
+
+                else:
+                    ax.plot(data['x'], data['y'], label=lbl, color=col, linestyle=data.get('linestyle', '-'))
+
+                if data.get('title'): ax.set_title(data['title'], fontweight='bold', fontsize=13)
+                if data.get('xlabel'): ax.set_xlabel(data['xlabel'], fontweight='bold')
+                if data.get('ylabel'): ax.set_ylabel(data['ylabel'], fontweight='bold')
+
+            if ax.get_legend_handles_labels()[1]:
+                leg = ax.legend(frameon=True, loc=act_leg)
                 leg.get_frame().set_facecolor(ENGRAVED_BLACK)
                 leg.get_frame().set_edgecolor(STENCIL_YELLOW)
 
-            # --- JUPITER LOGO ---
-            l_pos = get_logo_pos(active_logo_loc)
-            ax.text(l_pos['x'], l_pos['y'], "JUPITER INDUSTRIES", transform=ax.transAxes, 
-                    fontsize=9, color=AMMO_CRATE_GREEN, fontweight='bold',
-                    verticalalignment=l_pos['va'],
-                    horizontalalignment=l_pos['ha'],
+            lp = get_logo_pos(act_logo)
+            ax.text(lp['x'], lp['y'], "JUPITER INDUSTRIES", transform=ax.transAxes,
+                    fontsize=9, color=AMMO_CRATE_GREEN, fontweight='bold', va=lp['va'], ha=lp['ha'],
                     bbox=dict(facecolor=STENCIL_YELLOW, edgecolor=STENCIL_YELLOW, boxstyle='square,pad=0.2'))
 
         fig.tight_layout()
         created_figs.append((fig, axes))
         
-        # Save logic (omitted for brevity, same as before)
-        if len(figures_data) > 1:
-            clean_name = fileName.replace(".png", "")
-            save_path = os.path.join("plots", f"{clean_name}_{fig_idx}.png")
-        else:
-            save_path = os.path.join("plots", fileName if fileName.endswith(".png") else f"{fileName}.png")
-        if os.path.exists(save_path): raise FileExistsError(f"File '{save_path}' exists.")
-        plt.savefig(save_path, dpi=600)
+        path = os.path.join("plots", f"{fileName.replace('.png','')}_{fig_idx}.png" if len(figures_data)>1 else f"{fileName.replace('.png','')}.png")
+        if os.path.exists(path): raise FileExistsError(f"File {path} exists.")
+        plt.savefig(path, dpi=600)
 
     if show: plt.show()
     return created_figs
