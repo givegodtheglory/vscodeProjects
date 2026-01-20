@@ -1,15 +1,17 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.fft import fft, fftshift, fftfreq, rfft, rfftfreq
-from helperFunctions import generate_pulse_train, auto_organize, plot_flex, CHALK_WHITE, STENCIL_YELLOW, DANGER_RED
+from helperFunctions import generate_pulse_train, auto_organize, plot_flex, CHALK_WHITE, STENCIL_YELLOW, DANGER_RED, KHAKI_SAND
 from scipy.signal import welch
 import random
 import string
 
 # --- 1. Generate Data ---
-# Time Domain
+# Time Domain: Sum of two sine waves (10 Hz and 4 Hz)
 t = np.linspace(0, 1, 2000, endpoint=True)
-y = np.sin(2*np.pi*10*t) # Changed freq to 10Hz so it looks better in time domain
+y = np.sin(2*np.pi*10*t) + np.sin(2*np.pi*4*t)
+
+
 
 # Frequency Domain
 fftSin = rfft(y)
@@ -17,27 +19,30 @@ dt = t[1]-t[0]
 fftSamplingFreq = 1/dt
 fftFreqs = rfftfreq(len(y), d=1/fftSamplingFreq)
 
-# --- 2. Process Frequency Data (Split Tone vs Noise) ---
-tone_index_mask = np.isclose(fftFreqs, 10.0, atol=0.01) # Matching the 10Hz signal
+# --- 2. Process Frequency Data (Split Tones vs Noise) ---
+# [FIXED] Create a mask that finds BOTH 10 Hz and 4 Hz
+mask_10 = np.isclose(fftFreqs, 10.0, atol=0.01)
+mask_4  = np.isclose(fftFreqs, 4.0,  atol=0.01)
 
-# Dataset A: Noise (Everything EXCEPT the tone)
+# Combine them with OR (|)
+tone_index_mask = mask_10 | mask_4 
+
+# Dataset A: Noise (Everything EXCEPT the tones)
 x_noise = fftFreqs[~tone_index_mask]
 y_noise = np.abs(fftSin)[~tone_index_mask]
 
-# Dataset B: Tone (ONLY the tone)
+# Dataset B: Tones (ONLY 4 Hz and 10 Hz)
 x_tone = fftFreqs[tone_index_mask]
 y_tone = np.abs(fftSin)[tone_index_mask]
 
 # --- 3. Organize Data for Plotter ---
-# We now have 3 distinct traces to plot:
 # 1. Time Domain Signal
-# 2. Frequency Noise Floor
-# 3. Frequency Discrete Tone
+# 2. Frequency Noise Floor (Line)
+# 3. Frequency Discrete Tones (Stem)
 all_x = [t, x_noise, x_tone]
 all_y = [y, y_noise, y_tone]
 
-# Define Colors for the 3 traces
-# Time = White, Noise = White, Tone = Red
+# Colors: Time=White, Noise=White, Tones=Red
 my_colors = [CHALK_WHITE, CHALK_WHITE, CHALK_WHITE]
 
 # --- 4. Configure Layout ---
@@ -45,26 +50,27 @@ figures = auto_organize(
     all_x, 
     all_y, 
     
-    # LAYOUT: Window 1 has [Subplot 1 (1 trace), Subplot 2 (2 traces)]
-    layout=[[1, 2]], 
+    # Window 1: [Top Subplot (1 trace), Bottom Subplot (2 traces)]
+    layout=[[1, 2]],
     
     titles=["Time Domain", "Frequency Spectrum"],
     xtitles=["Time (s)", "Frequency (Hz)"],
     ytitles=["Amplitude (V)", "Magnitude"],
     
-    legend_labels=["Signal", "Noise Floor", "Discrete Tone"],
+    legend_labels=["Signal", "Noise Floor", "Discrete Tones"],
     
-    # PLOT TYPES:
-    # Subplot 1: ["line"]
-    # Subplot 2: ["line", "stem"]
+    # Top: Line | Bottom: Line + Stem
     plot_types=[[ ["line"], ["line", "stem"] ]],
     
     colors=my_colors,
     
-    # Optional: Zoom in on the frequency plot to see the split better
-    xlims=[[None, (0, 20)]] 
+    # Zoom to 0-20Hz to see the 4Hz and 10Hz clearly
+    xlims=[[None, (0, 20)]],
+    
+    # [FIXED] Updated legend structure to match layout (1 win -> 2 subplots)
+    legend_locs=[["upper right", "upper right"]],
+    logo_locs=[["lower right", "lower right"]] 
 )
 
 # 5. Plot
-randString = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
-plot_flex(figures, fileName=randString + "_CombinedPlot.png")
+plot_flex(figures, fileName="sineWaveMultiTone.png")
