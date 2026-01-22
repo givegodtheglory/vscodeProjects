@@ -15,7 +15,7 @@ span = 6                     # Filter span
 # --- 2. Generate Single Pulse Data ---
 # We force the bits to be a single '1' to see the impulse response clearly
 #bits = np.array([1])
-bits = np.array([1])
+bits = np.array([1, 0, 1, 0])
 
 # Generate time vector ONCE (since our helper function now guarantees alignment)
 # NEW (Fixed)
@@ -32,12 +32,11 @@ pt, t, rcPointEightAlpha, shape_t = generate_pulse_train('Root Raised Cosine', b
 pt, t, rcOneAlpha, shape_t = generate_pulse_train('Root Raised Cosine', bits, symbolRate, 1, span, BT, samplingFreqHz, return_pulse_shape=True)
 
 
-
 data_x = [shape_t+3, shape_t+3, shape_t+3, shape_t+3]
 data_y = [10*rcZeroAlpha, 10*rcPointThreeAlpha, 10*rcPointEightAlpha, 10*rcOneAlpha]
 
 # 3. Define Attributes Lists (Order matches data_x/data_y)
-my_titles   = ["Root Raised Cosine (RC) Pulse"]
+my_titles   = ["Raised Cosine (RC) Pulse"]
 my_legends  = ["Alpha = 0", "Alpha = 0.3", "Alpha = 0.8", "Alpha = 1"]
 my_xtitles  = ["Time (ms)"]
 my_ytitles  = ["Voltage (V)"]
@@ -59,4 +58,4 @@ figures = auto_organize(
 )
 
 # 5. Plot
-plot_flex(figures,fileName="RootRaisedCosinePulseComparison.png")
+plot_flex(figures,fileName="test10.png")

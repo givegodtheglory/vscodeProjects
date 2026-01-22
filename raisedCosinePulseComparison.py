@@ -15,7 +15,7 @@ span = 6                     # Filter span
 # --- 2. Generate Single Pulse Data ---
 # We force the bits to be a single '1' to see the impulse response clearly
 #bits = np.array([1])
-bits = np.array([1, 0,1,1,0,0])
+bits = np.array([1, 1])
 
 # Generate time vector ONCE (since our helper function now guarantees alignment)
 # NEW (Fixed)
@@ -27,19 +27,19 @@ psd_data = {}
 N_FFT = 2048 * 8  # Zero padding for smooth frequency plot
 
 pulseTrainZero, t, rcZeroAlpha, shape_t = generate_pulse_train('Raised Cosine', bits, symbolRate, 0, span, BT, samplingFreqHz, return_pulse_shape=True)
-pulseTrainPointThree, t, rcPointThreeAlpha, shape_t = generate_pulse_train('Raised Cosine', bits, symbolRate, 0.3, span, BT, samplingFreqHz, return_pulse_shape=True)
-pulseTrainPointEight, t, rcPointEightAlpha, shape_t = generate_pulse_train('Raised Cosine', bits, symbolRate, 0.8, span, BT, samplingFreqHz, return_pulse_shape=True)
-pulseTrainOne, t, rcOneAlpha, shape_t = generate_pulse_train('Raised Cosine', bits, symbolRate, 1, span, BT, samplingFreqHz, return_pulse_shape=True)
+# pulseTrainPointThree, t, rcPointThreeAlpha, shape_t = generate_pulse_train('Raised Cosine', bits, symbolRate, 0.3, span, BT, samplingFreqHz, return_pulse_shape=True)
+# pulseTrainPointEight, t, rcPointEightAlpha, shape_t = generate_pulse_train('Raised Cosine', bits, symbolRate, 0.8, span, BT, samplingFreqHz, return_pulse_shape=True)
+# pulseTrainOne, t, rcOneAlpha, shape_t = generate_pulse_train('Raised Cosine', bits, symbolRate, 1, span, BT, samplingFreqHz, return_pulse_shape=True)
 
-data_x = [t, t, t, t]
-data_y = [10*pulseTrainZero, 10*pulseTrainPointThree, 10*pulseTrainPointEight, 10*pulseTrainOne]
+data_x = [t]
+data_y = [10*pulseTrainZero]
 
 # 3. Define Attributes Lists (Order matches data_x/data_y)
 my_titles   = ["Raised Cosine (RC) Pulse"]
 my_legends  = ["Alpha = 0", "Alpha = 0.3", "Alpha = 0.8", "Alpha = 1"]
 my_xtitles  = ["Time (ms)"]
 my_ytitles  = ["Voltage (V)"]
-my_colors   = [URANIUM_GREEN, RAD_METER_ORANGE , PLASMA_BLUE, DANGER_RED]
+my_colors   = [CHALK_WHITE, RAD_METER_ORANGE , PLASMA_BLUE, DANGER_RED]
 my_styles   = ['-']  # <--- Styles: Solid, Dashed, Dotted
 
 
@@ -53,8 +53,10 @@ figures = auto_organize(
     ytitles=my_ytitles,
     legend_labels=my_legends,
     colors=my_colors,
-    linestyles=my_styles       # <--- Passing the styles list
+    linestyles=my_styles,
+    legend_locs=[[(0.2,0.35)]]
 )
 
 # 5. Plot
-plot_flex(figures,fileName="RaisedCosinePulseTrain.png")
+randomString = np.random.randint(7);
+plot_flex(figures,fileName= str(randomString) + "2RaisedCosinePulseTrain.png")

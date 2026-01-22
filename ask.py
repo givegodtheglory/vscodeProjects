@@ -48,6 +48,7 @@ for name, sig in signals.items():
 plt.title('ASK Modulated Pulse Shapes in Time Domain (Offset for comparison)')
 plt.xlabel('Time (s)')
 plt.ylabel('Amplitudes (Shifted)')
+
 #plt.xlim(0, 0.05) # Show first few symbols
 plt.grid(True, alpha=0.3)
 plt.legend(loc='upper right', fontsize='small')
