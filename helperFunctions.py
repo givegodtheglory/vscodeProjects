@@ -230,15 +230,10 @@ def plot(xArg, yArg, xAxisTitle=0, yAxisTitle=0, plotTitle=0):
     fig.show()
     return 0
 
-
-# ==========================================
-# 1. ROBUST FILTER GENERATORS
-# (Fixed math for singularities, normalized correctly)
-# ==========================================
-
-# ==========================================
-# 1. ROBUST FILTER GENERATORS (Unchanged)
-# ==========================================
+#Archived pulse functions. Deprecated since when I tried to form pulse trains, they
+#do not accept time vector arguments and so I end up with trailing and prefix zeros
+#creating discontinuites in the pulseTrain. 
+""" 
 def get_rrc_filter(alpha, span, sps):
     t = np.arange(-span*sps//2, span*sps//2 + 1) / sps
     if alpha == 0: alpha = 1e-8
@@ -273,108 +268,453 @@ def get_gauss_filter(BT, span, sps):
     sigma = np.sqrt(np.log(2)) / (2 * np.pi * BT)
     h = (1 / (np.sqrt(2 * np.pi) * sigma)) * np.exp(-(t**2) / (2 * sigma**2))
     return h / np.sum(h) * sps
+ """
 
 
-# ==========================================
-# 2. ALIGNED PULSE GENERATOR
-# ==========================================
-
-def generate_pulse_train(pulse_type, bits, symbolRate, alpha, span, BT, sampling_frequency_hz, return_pulse_shape=False, debug_mode=False):
+def pulsetr(fun, alpha, numberOfPointsPerSymbolInterval, filterSpan, data):
     """
-    Generates a pulse train with TIME ALIGNMENT CORRECTION.
-    The time vector is shifted so that the peak of the first bit occurs at t=0.
-    """
-    # --- SETUP ---
-    bipolar_bits = np.where(bits == 1, 1, -1)
+    Generates a pulse train y, given a transmission pulse sequence in data
+    and a function 'fun' that generates the basic pulse.
     
-    raw_sps = sampling_frequency_hz / symbolRate
-    samplesPerSymbol = int(raw_sps)
-    if not np.isclose(raw_sps, samplesPerSymbol):
-        warnings.warn(f"Non-integer samples per symbol ({raw_sps:.4f}).")
+    Parameters:
+    - fun:   The function object (or name) to generate the pulse (e.g., rc_pulse).
+             Must accept inputs (alpha, time_vector).
+    - alpha:     Pulse parameter (e.g., alpha/roll-off).
+    - numberOfPointsPerSymbolInterval:     Number of points per symbol interval (oversampling factor).
+    - Pulse width: Total width of the pulse in symbol intervals.
+    - data:  The sequence of symbols (amplitudes).
+    
+    Returns:
+    - y:     The generated pulse train.
+    - t:     The time vector used for the single pulse.
+    """
+    
+    # --- 1. Setup Time Vector for the Basic Pulse ---
+    # MATLAB: int = 1/n; t = -width/2:int:width/2;
+    # Python: We use linspace for better floating point precision than arange
+    samples_per_pulse = int(filterSpan * numberOfPointsPerSymbolInterval + 1)
+    symbolTimeVector = np.linspace(-filterSpan/2, filterSpan/2, samples_per_pulse)
+    
+    lt = len(symbolTimeVector)
+    len_data = len(data)
+    
+    # --- 2. Calculate Output Size ---
+    # MATLAB: num = n * (width + len - 1) + 1;
+    # (Total samples needed to accommodate the overlapping pulses)
+    total_samples = int(numberOfPointsPerSymbolInterval * (filterSpan + len_data - 1) + 1)
+    
+    # --- 3. Generate Basic Pulse ---
+    # MATLAB: x = feval(fun, a, t);
+    # Python: We call the function object directly
+    x = fun(alpha, symbolTimeVector)
+    
+    # --- 4. Superpose Pulses ---
+    y = np.zeros(total_samples)
+    
+    for k in range(len_data):
+        # Calculate the starting index (offset)
+        # MATLAB: tmp = n*(k-1)  (1-based indexing)
+        # Python: offset = n*k   (0-based indexing)
+        offset = k * numberOfPointsPerSymbolInterval
+        
+        # Add the weighted pulse to the correct slice of y
+        # This replaces the inefficient [zeros... x ... zeros] concatenation
+        y[offset : offset + lt] += x * data[k]
+        
+    return y, symbolTimeVector
 
-    expected_len = samplesPerSymbol * len(bits)
-    pulse_train = np.zeros(expected_len)
-    single_pulse_y = None
-    single_pulse_t = None
+def get_raised_cosine_filter_unit_amplitude(time_vector, rolloff_factor, samples_per_symbol):
+    """
+    Computes the Raised Cosine (RC) filter impulse response for a given time vector.
+
+    The Raised Cosine filter is widely used in digital communications to shape pulses
+    to minimize Inter-Symbol Interference (ISI). It satisfies the Nyquist ISI criterion,
+    meaning the pulse is 1 at t=0 and 0 at all other symbol intervals (t = +/-1, +/-2...).
+
+    Mathematical Formula:
+                 sin(pi * t/T)       cos(pi * alpha * t/T)
+        h(t) =  ---------------  * -----------------------
+                   pi * t/T          1 - (2 * alpha * t/T)^2
+
+        Where:
+        - T is the symbol period (normalized to 1.0 in this function).
+        - alpha is the rolloff factor (0 to 1).
+        - The first term is a standard Sinc function (ideal low-pass filter).
+        - The second term tapers the Sinc tails to reduce ISI sensitivity to timing jitter.
+
+    Args:
+        time_vector (np.array): 
+            Array of time indices normalized by the symbol period.
+            - t = 0.0 corresponds to the center of the pulse (peak).
+            - t = 1.0 corresponds to the time of the next symbol.
+            - Example: np.linspace(-3, 3, 61) covers 3 symbols before and after.
+
+        rolloff_factor (float): 
+            The excess bandwidth parameter (alpha), 0 <= alpha <= 1.
+            - alpha = 0: Converges to a pure Sinc function (brick-wall filter).
+            - alpha = 1: Decays faster but uses twice the bandwidth.
+            - Controls the trade-off between bandwidth efficiency and timing sensitivity.
+
+        samples_per_symbol (int): 
+            The number of samples representing one symbol period.
+            Used to normalize the filter energy so the gain is unity.
+
+    Returns:
+        np.array: The normalized impulse response evaluated at the points in `time_vector`.
+    """
+    
+    # --- Pre-computation Safety Check ---
+    # If alpha is exactly 0, the denominator logic 1-(2at)^2 simplifies to 1.
+    # We nudge it slightly to 1e-8 to avoid strict zero-division issues in the
+    # singularity check without materially changing the result.
+    if rolloff_factor == 0:
+        rolloff_factor = 1e-8
+
+    # --- Step 1: Calculate the Numerator ---
+    # The numerator is the product of a Sinc function and a Cosine term.
+    # Formula: sinc(t) * cos(pi * alpha * t)
+    sinc_part = np.sinc(time_vector)
+    cos_part = np.cos(np.pi * rolloff_factor * time_vector)
+    numerator = sinc_part * cos_part
+
+    # --- Step 2: Calculate the Denominator ---
+    # The denominator introduces a potential singularity when 1 - (2 * alpha * t)^2 = 0.
+    # This happens when t = +/- 1 / (2 * alpha).
+    denominator = 1 - (2 * rolloff_factor * time_vector)**2
+
+    # --- Step 3: Perform Division with Safety Handling ---
+    # We expect division by zero at the singularity points calculated above.
+    # We suppress warnings here and manually fix the invalid values in Step 4.
+    with np.errstate(divide='ignore', invalid='ignore'):
+        h = numerator / denominator
+
+    # --- Step 4: Handle Singularities (L'Hôpital's Rule) ---
+    # At t = +/- 1 / (2 * alpha), the limit of the function is:
+    # Limit = (pi / 4) * sinc(1 / (2 * alpha))
+    singularity_mask = np.isclose(denominator, 0, atol=1e-5)
+    
+    if np.any(singularity_mask):
+        limit_val = (np.pi / 4) * np.sinc(1 / (2 * rolloff_factor))
+        h[singularity_mask] = limit_val
+
+    # --- Step 5: Normalize Peak Amplitude ---
+    # Normalize so that the sum of coefficients equals samples_per_symbol.
+    # This ensures that a constant stream of 1s produces a unity gain output.
+    if np.sum(h) != 0:
+        h = h / np.max(np.abs(h)) 
+
+    return h
+
+def get_root_raised_cosine_filter(time_vector, rolloff_factor, samples_per_symbol):
+    """
+    Computes the Root Raised Cosine (RRC) filter impulse response for a given time vector.
+
+    The RRC filter is the "square root" of the RC filter in the frequency domain.
+    It is typically used in a matched filter pair: one RRC filter at the Transmitter (TX)
+    and one identical RRC filter at the Receiver (RX). 
+    
+    Note: A single RRC pulse does NOT satisfy the Nyquist ISI criterion. 
+    Zero ISI is only achieved after the signal has passed through *both* filters:
+    H_total(f) = H_RRC(f) * H_RRC(f) = H_RC(f).
+
+    Mathematical Formula:
+               sin(pi*t*(1-a)) + 4*a*t * cos(pi*t*(1+a))
+        h(t) = -----------------------------------------
+                   pi * t * (1 - (4*a*t)^2)
+
+        Where:
+        - t is the normalized time (t/T).
+        - a is the rolloff factor (alpha).
+        - The numerator is a SUM of a sine term and a scaled cosine term.
+        - The denominator has a singularity at t = +/- 1/(4a).
+
+    Args:
+        time_vector (np.array): 
+            Array of time indices normalized by the symbol period.
+            - t = 0.0 corresponds to the center of the pulse.
+        
+        rolloff_factor (float): 
+            The excess bandwidth parameter (alpha), 0 <= alpha <= 1.
+        
+        samples_per_symbol (int): 
+            The number of samples representing one symbol period.
+
+    Returns:
+        np.array: The normalized impulse response evaluated at the points in `time_vector`.
+    """
+
+    # --- Pre-computation Safety Check ---
+    if rolloff_factor == 0:
+        rolloff_factor = 1e-8
+
+    # --- Step 1: Calculate Numerator Terms ---
+    # Unlike the RC filter (product), the RRC numerator is a SUM of two terms.
+    
+    # Term A: sin(pi * t * (1-alpha))
+    term1 = np.sin(np.pi * time_vector * (1 - rolloff_factor))
+    
+    # Term B: 4 * alpha * t * cos(pi * t * (1+alpha))
+    # This term is scaled linearly by time 't'.
+    term2 = (4 * rolloff_factor * time_vector) * np.cos(np.pi * time_vector * (1 + rolloff_factor))
+    
+    numerator = term1 + term2
+
+    # --- Step 2: Calculate Denominator ---
+    # The denominator singularity occurs when 1 - (4 * alpha * t)^2 = 0.
+    # This implies t = +/- 1 / (4 * alpha).
+    # There is also a singularity at t=0 due to the (pi * t) term.
+    denominator = np.pi * time_vector * (1 - (4 * rolloff_factor * time_vector)**2)
+
+    # --- Step 3: Perform Division with Safety Handling ---
+    with np.errstate(divide='ignore', invalid='ignore'):
+        h = numerator / denominator
+
+    # --- Step 4: Handle Singularities ---
+    
+    # Case A: The Peak at t = 0
+    # The limit as t -> 0 is: 1 - alpha + (4 * alpha / pi)
+    peak_mask = np.isclose(time_vector, 0, atol=1e-5)
+    if np.any(peak_mask):
+        h[peak_mask] = 1 - rolloff_factor + (4 * rolloff_factor / np.pi)
+        
+    # Case B: The Side Singularities at t = +/- 1 / (4 * alpha)
+    # The denominator becomes zero here. Using L'Hôpital's rule, we calculate the limit.
+    side_mask = np.isclose(np.abs(time_vector), 1 / (4 * rolloff_factor), atol=1e-5)
+    if np.any(side_mask):
+        # Specific limit value for this RRC form
+        val = (rolloff_factor / np.sqrt(2)) * (
+            (1 + 2/np.pi) * np.sin(np.pi/4) + (1 - 2/np.pi) * np.cos(np.pi/4)
+        )
+        h[side_mask] = val
+
+    # --- Step 5: Normalize Energy ---
+    # Standard normalization for discrete time simulation.
+    if np.sum(h) != 0:
+        h = h / np.sum(h) * samples_per_symbol
+
+    return h
+
+def get_gaussian_filter(time_vector, bt_product, samples_per_symbol):
+    """
+    Computes the Gaussian filter impulse response for a given time vector.
+
+    The Gaussian filter is used in modulation schemes like GMSK (GSM) and FSK.
+    Unlike RC/RRC, it does NOT satisfy the Nyquist zero-ISI criterion (it causes ISI).
+    However, it has optimal time-frequency localization, meaning it provides the
+    smoothest possible transitions between bits. This eliminates zero-crossing 
+    jitter and reduces spectral regrowth in non-linear power amplifiers.
+
+    Mathematical Formula:
+        h(t) = B * sqrt(2*pi / ln(2)) * exp( -2 * pi^2 * B^2 * t^2 / ln(2) )
+
+        Where:
+        - B is the Bandwidth-Time product (BT).
+        - ln(2) relates to the half-power (3dB) bandwidth.
+        - The pulse is a pure exponential bell curve.
+
+    Args:
+        time_vector (np.array): 
+            Array of time indices normalized by the symbol period.
+        
+        bt_product (float): 
+            The Bandwidth-Time product (e.g., 0.3 or 0.5).
+            - Small BT (e.g., 0.3): Narrow Bandwidth -> Wider Pulse in Time -> More ISI.
+            - Large BT (e.g., 1.0): Wide Bandwidth -> Sharper Pulse in Time -> Less ISI.
+        
+        samples_per_symbol (int): 
+            The number of samples representing one symbol period.
+
+    Returns:
+        np.array: The normalized impulse response evaluated at the points in `time_vector`.
+    """
+    
+    # --- Step 1: Define Gaussian Constants ---
+    # These constants are derived from the requirement that 'B' represents the 3dB bandwidth.
+    ln2 = np.log(2)
+    
+    # Amplitude Coefficient: B * sqrt(2*pi / ln2)
+    amplitude_factor = (np.sqrt(2 * np.pi / ln2) * bt_product)
+    
+    # Exponent Coefficient: -2 * pi^2 * B^2 / ln2
+    # Note: BT is in the numerator. A smaller BT makes the exponent smaller,
+    # resulting in a slower decay (wider pulse).
+    exponent_factor = - (2 * np.pi**2 * bt_product**2 / ln2)
+    
+    # --- Step 2: Compute the Exponential ---
+    # h(t) = A * exp( C * t^2 )
+    # This calculation is safe for all t; there are no singularities in a Gaussian.
+    h = amplitude_factor * np.exp(exponent_factor * time_vector**2)
+    
+    # --- Step 3: Normalize Energy ---
+    # The Gaussian pulse theoretically extends to infinity. 
+    # We normalize by the sum of the samples in our finite window to ensure Unity Gain.
+    if np.sum(h) != 0:
+        h = h / np.sum(h) * samples_per_symbol
+        
+    return h
+
+def generate_pulse_train(pulse_type, bits, symbol_rate, alpha, span, BT, sampling_freq_hz, truncate_tails=True, return_pulse_shape=False, debug_mode=False):
+    """
+    Generates a pulse train. 
+    
+    Args:
+        truncate_tails (bool): If True, cuts the start/end filter tails so the output length 
+                               is EXACTLY (num_symbols * samples_per_symbol). 
+                               Fixes 'operands could not be broadcast' errors.
+    """
+    
+    # --- 1. COMMON SETUP ---
+    bipolar_symbols = np.where(bits == 1, 1, -1)
+    samples_per_symbol = int(sampling_freq_hz / symbol_rate)
+    symbol_period_sec = 1 / symbol_rate
+    num_symbols = len(bits)
+    
+    # Calculate the exact expected length (without tails)
+    expected_length = num_symbols * samples_per_symbol
+    
     debug_traces = []
-    
-    # Variable to track the group delay (in seconds) so we can shift 't' later
-    delay_seconds = 0.0
+    single_pulse_shape = None
+    single_pulse_t = None
+    pulse_train = None
+    time_vector = None
 
-    # --- RECTANGULAR PULSE LOGIC ---
-    if pulse_type in ['Unipolar NRZ', 'Polar NRZ', 'Unipolar RZ', 'Manchester']:
-        # Rectangular pulses are causal by definition (delay = 0 usually, or half symbol)
-        # We generally treat t=0 as the start of the bit.
-        single_pulse_t = np.arange(samplesPerSymbol) / sampling_frequency_hz
-        single_pulse_y = np.ones(samplesPerSymbol)
+    # =========================================================================
+    # BRANCH A: SHAPED PULSES (RC, RRC, Gaussian)
+    # Uses Shift & Add, then truncates tails if requested
+    # =========================================================================
+    if pulse_type in ['Raised Cosine', 'Root Raised Cosine', 'Gaussian']:
+        
+        # A1. Define Global Time Vector (WITH TAILS initially)
+        # We need the tails for the math to work, even if we cut them later.
+        tail_duration_sec = (span / 2) * symbol_period_sec
+        total_duration_sec = (num_symbols * symbol_period_sec) + (2 * tail_duration_sec)
+        
+        t_start = -tail_duration_sec
+        t_end = t_start + total_duration_sec
+        total_samples = int(total_duration_sec * sampling_freq_hz)
+        
+        time_vector = np.linspace(t_start, t_end, total_samples, endpoint=False)
+        pulse_train = np.zeros_like(time_vector)
+
+        # A2. Loop and Sum
+        for i, symbol_val in enumerate(bipolar_symbols):
+            
+            # Shift time relative to current symbol center
+            current_symbol_center_time = i * symbol_period_sec
+            shifted_time_sec = time_vector - current_symbol_center_time
+            normalized_shifted_time = shifted_time_sec / symbol_period_sec
+            
+            # Compute Pulse
+            if pulse_type == 'Raised Cosine':
+                pulse_shape = get_raised_cosine_filter_unit_amplitude(normalized_shifted_time, alpha, samples_per_symbol)
+            
+            elif pulse_type == 'Root Raised Cosine':
+
+                 pulse_shape = get_root_raised_cosine_filter(normalized_shifted_time, alpha, samples_per_symbol)
+            
+            elif pulse_type == 'Gaussian':
+                 pulse_shape = get_gaussian_filter(normalized_shifted_time, alpha, samples_per_symbol)
+           
+            # Enforce Span
+            mask = np.abs(normalized_shifted_time) <= (span / 2)
+            pulse_shape[~mask] = 0
+            
+            # Superposition
+            scaled_pulse = symbol_val * pulse_shape
+            pulse_train += scaled_pulse
+            
+            # Debug Capture
+            if i == 0:
+                single_pulse_shape = pulse_shape
+                single_pulse_t = normalized_shifted_time
+            
+            if debug_mode:
+                debug_traces.append(scaled_pulse)
+
+        # A3. Truncate Tails (Crucial Fix)
+        if truncate_tails:
+            # We determine where the "Data" actually starts (t=0)
+            # Find the index closest to t=0
+            start_idx = np.argmin(np.abs(time_vector))
+            
+            # Slice exactly 'expected_length' samples from that point
+            # This drops the negative-time tail and the post-sequence tail
+            if start_idx + expected_length <= len(pulse_train):
+                pulse_train = pulse_train[start_idx : start_idx + expected_length]
+                time_vector = time_vector[start_idx : start_idx + expected_length]
+            else:
+                # Fallback if rounding errors make array slightly too short
+                pulse_train = pulse_train[start_idx:]
+                time_vector = time_vector[start_idx:]
+            
+            if debug_mode and len(debug_traces) > 0:
+                 # Truncate traces too
+                 debug_traces = [d[start_idx : start_idx + expected_length] for d in debug_traces]
+
+    # =========================================================================
+    # BRANCH B: RECTANGULAR PULSES (NRZ, RZ, Manchester)
+    # Uses Simple Construction (No tails, always matches expected_length)
+    # =========================================================================
+    elif pulse_type in ['Unipolar NRZ', 'Polar NRZ', 'Unipolar RZ', 'Manchester']:
+        
+        # B1. Create the Raw Pulse Stream
+        raw_pulse = np.zeros(expected_length)
         
         if pulse_type == 'Unipolar NRZ':
-            pulse_train = np.repeat(bits, samplesPerSymbol)
+            raw_pulse = np.repeat(bits, samples_per_symbol)
+            
         elif pulse_type == 'Polar NRZ':
-            pulse_train = np.repeat(bipolar_bits, samplesPerSymbol)
-        # ... (Other rect logic omitted for brevity, logic assumes aligned at start)
-        
-        # For rect pulses, "Peak" is the whole bit. We leave t=0 as start of bit.
-        delay_seconds = 0.0 
+            raw_pulse = np.repeat(bipolar_symbols, samples_per_symbol)
+            
+        elif pulse_type == 'Unipolar RZ':
+            half_sps = samples_per_symbol // 2
+            one_template = np.zeros(samples_per_symbol)
+            one_template[:half_sps] = 1 # High for first half
+            
+            for k, bit in enumerate(bits):
+                if bit == 1:
+                    start = k * samples_per_symbol
+                    raw_pulse[start : start+samples_per_symbol] = one_template
 
-    # --- SHAPED PULSE LOGIC ---
-    elif pulse_type in ['Raised Cosine', 'Root Raised Cosine', 'Gaussian']:
-        
-        # 1. Generate Kernel
-        single_pulse_t = np.arange(-span*samplesPerSymbol//2, span*samplesPerSymbol//2 + 1) / samplesPerSymbol
-        
-        if pulse_type == 'Raised Cosine':      h = get_rc_filter(alpha, span, samplesPerSymbol)
-        elif pulse_type == 'Root Raised Cosine': h = get_rrc_filter(alpha, span, samplesPerSymbol)
-        elif pulse_type == 'Gaussian':         h = get_gauss_filter(BT, span, samplesPerSymbol)
-        
-        single_pulse_y = h 
-
-        # 2. Convolve (mode='full')
-        upsampled = np.zeros(expected_len)
-        upsampled[::samplesPerSymbol] = bipolar_bits
-        pulse_train = np.convolve(upsampled, h, mode='full')
-
-        # 3. CALCULATE DELAY TO SHIFT TIME VECTOR
-        # The filter peak is at index len(h)//2. 
-        # This is the "Group Delay".
-        delay_samples = len(h) // 2
-        delay_seconds = delay_samples / sampling_frequency_hz
-
-        if debug_mode:
-            # Generate traces using same logic
-            for i, bit_val in enumerate(bipolar_bits):
-                single_bit_stream = np.zeros(expected_len)
-                single_bit_stream[i * samplesPerSymbol] = bit_val
-                trace = np.convolve(single_bit_stream, h, mode='full')
+        elif pulse_type == 'Manchester':
+            half_sps = samples_per_symbol // 2
+            for k, bit in enumerate(bits):
+                start = k * samples_per_symbol
+                mid = start + half_sps
+                end = start + samples_per_symbol
                 
-                # Pad to match main train length if necessary
-                if len(trace) != len(pulse_train):
-                     padded = np.zeros(len(pulse_train))
-                     min_len = min(len(trace), len(pulse_train))
-                     padded[:min_len] = trace[:min_len]
-                     trace = padded
-                debug_traces.append(trace)
+                if bit == 1: # 1 -> High-Low
+                    raw_pulse[start:mid] = 1
+                    raw_pulse[mid:end] = -1
+                else:        # 0 -> Low-High
+                    raw_pulse[start:mid] = -1
+                    raw_pulse[mid:end] = 1
+
+        pulse_train = raw_pulse
+        time_vector = np.arange(len(pulse_train)) / sampling_freq_hz
+        
+        # Dummy return shapes
+        single_pulse_shape = np.ones(samples_per_symbol)
+        single_pulse_t = np.linspace(0, 1, samples_per_symbol)
 
     else:
         raise ValueError(f"Unknown pulse type: {pulse_type}")
 
-    # --- NORMALIZATION ---
+    # --- 3. FINAL NORMALIZATION ---
     if np.max(np.abs(pulse_train)) != 0:
         max_val = np.max(np.abs(pulse_train))
         pulse_train = pulse_train / max_val
-        if debug_mode:
-            debug_traces = [trace / max_val for trace in debug_traces]
+        if debug_mode and len(debug_traces) > 0:
+            debug_traces = [d / max_val if np.max(np.abs(d))!=0 else d for d in debug_traces]
 
-    # --- TIME VECTOR CORRECTION ---
-    # We shift the time vector backwards by the delay.
-    # Result: t=0 is the Peak of the first bit.
-    raw_time = np.arange(len(pulse_train)) / sampling_frequency_hz
-    time_vector = raw_time - delay_seconds
-
+    # --- 4. RETURNS ---
     if debug_mode:
         return pulse_train, time_vector, debug_traces
 
     if return_pulse_shape:
-        return pulse_train, time_vector, single_pulse_y, single_pulse_t
+        if single_pulse_shape is not None and pulse_type in ['Raised Cosine', 'Root Raised Cosine', 'Gaussian']:
+             valid_indices = np.where(np.abs(single_pulse_t) <= span/2)[0]
+             return pulse_train, time_vector, single_pulse_shape[valid_indices], single_pulse_t[valid_indices]
+        return pulse_train, time_vector, None, None
     
     return pulse_train, time_vector
