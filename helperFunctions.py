@@ -325,7 +325,7 @@ def pulsetr(fun, alpha, numberOfPointsPerSymbolInterval, filterSpan, data):
 
 def get_raised_cosine_filter_unit_amplitude(time_vector, rolloff_factor, samples_per_symbol):
     """
-    Computes the Raised Cosine (RC) filter impulse response for a given time vector.
+    Computes the Raised Cosine (RC) filter impulse response for a given time vector. Unit Peak amplitude will be 1.0 
 
     The Raised Cosine filter is widely used in digital communications to shape pulses
     to minimize Inter-Symbol Interference (ISI). It satisfies the Nyquist ISI criterion,
@@ -405,9 +405,10 @@ def get_raised_cosine_filter_unit_amplitude(time_vector, rolloff_factor, samples
 
     return h
 
-def get_root_raised_cosine_filter(time_vector, rolloff_factor, samples_per_symbol):
+def get_root_raised_cosine_filter_unit_amplitude(time_vector, rolloff_factor, samples_per_symbol):
     """
     Computes the Root Raised Cosine (RRC) filter impulse response for a given time vector.
+    Unit Peak amplitude will be 1.0 
 
     The RRC filter is the "square root" of the RC filter in the frequency domain.
     It is typically used in a matched filter pair: one RRC filter at the Transmitter (TX)
@@ -487,17 +488,17 @@ def get_root_raised_cosine_filter(time_vector, rolloff_factor, samples_per_symbo
         )
         h[side_mask] = val
 
-    # --- Step 5: Normalize Energy ---
+    # --- Step 5: Normalize Amplitude ---
     # Standard normalization for discrete time simulation.
     if np.sum(h) != 0:
-        h = h / np.sum(h) * samples_per_symbol
-
+        h = h / np.max(np.abs(h))
     return h
 
-def get_gaussian_filter(time_vector, bt_product, samples_per_symbol):
+def get_gaussian_filter_unit_amplitude(time_vector, bt_product, samples_per_symbol):
     """
     Computes the Gaussian filter impulse response for a given time vector.
-
+    Unit Peak amplitude will be 1.0 
+    
     The Gaussian filter is used in modulation schemes like GMSK (GSM) and FSK.
     Unlike RC/RRC, it does NOT satisfy the Nyquist zero-ISI criterion (it causes ISI).
     However, it has optimal time-frequency localization, meaning it provides the
@@ -549,7 +550,7 @@ def get_gaussian_filter(time_vector, bt_product, samples_per_symbol):
     # The Gaussian pulse theoretically extends to infinity. 
     # We normalize by the sum of the samples in our finite window to ensure Unity Gain.
     if np.sum(h) != 0:
-        h = h / np.sum(h) * samples_per_symbol
+        h = h / np.max(np.abs(h))
         
     return h
 
@@ -610,7 +611,7 @@ def generate_pulse_train(pulse_type, bits, symbol_rate, alpha, span, BT, samplin
             
             elif pulse_type == 'Root Raised Cosine':
 
-                 pulse_shape = get_root_raised_cosine_filter(normalized_shifted_time, alpha, samples_per_symbol)
+                 pulse_shape = get_root_raised_cosine_filter_unit_amplitude(normalized_shifted_time, alpha, samples_per_symbol)
             
             elif pulse_type == 'Gaussian':
                  pulse_shape = get_gaussian_filter(normalized_shifted_time, alpha, samples_per_symbol)
