@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 from cycler import cycler
 import os
+import secrets
 
 # --- 1. THEME DEFINITION (Fat Man) ---
 AMMO_CRATE_GREEN = '#2e3b2b'
@@ -216,7 +217,10 @@ def plot_flex(figures_data, base_figsize=(10, 5), show=True, fileName="FatManPlo
 
         fig.tight_layout()
         created_figs.append((fig, axes))
-        
+        if "trash" in fileName.lower():
+            randomString = secrets.token_hex(16)
+            fileName = fileName+randomString
+
         path = os.path.join("plots", f"{fileName.replace('.png','')}_{fig_idx}.png" if len(figures_data)>1 else f"{fileName.replace('.png','')}.png")
         if os.path.exists(path): raise FileExistsError(f"File {path} exists.")
         plt.savefig(path, dpi=1000)
@@ -614,7 +618,7 @@ def generate_pulse_train(pulse_type, bits, symbol_rate, alpha, span, BT, samplin
                  pulse_shape = get_root_raised_cosine_filter_unit_amplitude(normalized_shifted_time, alpha, samples_per_symbol)
             
             elif pulse_type == 'Gaussian':
-                 pulse_shape = get_gaussian_filter(normalized_shifted_time, alpha, samples_per_symbol)
+                 pulse_shape = get_gaussian_filter_unit_amplitude(normalized_shifted_time, alpha, samples_per_symbol)
            
             # Enforce Span
             mask = np.abs(normalized_shifted_time) <= (span / 2)
