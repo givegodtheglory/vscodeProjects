@@ -19,33 +19,35 @@ signals = {
 pulseTrain =   (
     signals['Raised Cosine 1']
     - signals['Raised Cosine 2']
-    + signals['Raised Cosine 3']
-    - signals['Raised Cosine 4'])
+    #+ signals['Raised Cosine 3']
+    #+ signals['Raised Cosine 4']
+    )
 
-data_x = [pulseTimeVector]*1
+
+data_x = [pulseTimeVector]*5
 data_y = [
-    #signals['Raised Cosine 1'],
-    #signals['Raised Cosine 2'],
+    pulseTrain,
+    signals['Raised Cosine 1'],
+    -signals['Raised Cosine 2'],
     #signals['Raised Cosine 3'],
     #signals['Raised Cosine 4'],
-    pulseTrain,
     ]
 
 
 # 3. Define Attributes Lists (Order matches data_x/data_y)
-my_titles   = ["RC Pulse Train [1010]"]
+my_titles   = ["RC Pulse Train [10]"]
 my_legends  = ["Pulse"]
 my_xtitles  = ["Time (ms)"]
 my_ytitles  = ["Voltage (V)"]
-my_colors   = [URANIUM_GREEN, ENGRAVED_BLACK , PLASMA_BLUE, DANGER_RED, STENCIL_YELLOW]
-my_styles   = ['-', '-', '-', '-', '-']  # <--- Styles: Solid, Dashed, Dotted
+my_colors   = [STENCIL_YELLOW, URANIUM_GREEN, DANGER_RED]
+my_styles   = ['-', ':', ':']  # <--- Styles: Solid, Dashed, Dotted
 
 
 # 4. Organize
 figures = auto_organize(
     data_x, 
     data_y, 
-    layout=[[5]],             # Window 1 has 2 plots, Window 2 has 1 plot
+    layout=[[3]],             # Window 1 has 2 plots, Window 2 has 1 plot
     titles=my_titles,
     xtitles=my_xtitles,
     ytitles=my_ytitles,
@@ -57,6 +59,4 @@ figures = auto_organize(
 
 # 5. Plot
 
-plot_flex(figures,fileName="raisedCosinePlots/RaisedCosinePulseTrain1010_individual5.png")
-
-
+plot_flex(figures,fileName="raisedCosinePlots/raisedCosinePulseTrain10IndividualShown.png")
