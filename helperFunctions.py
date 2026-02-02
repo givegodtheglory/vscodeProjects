@@ -568,6 +568,9 @@ def generate_pulse_train(pulse_type, bits, symbol_rate, alpha, span, BT, samplin
                                Fixes 'operands could not be broadcast' errors.
     """
     
+    if not isinstance(bits,np.ndarray):
+        raise ValueError("ENSURE BITS IS OF TYPE NUMPY ARRAY")
+
     # --- 1. COMMON SETUP ---
     bipolar_symbols = np.where(bits == 1, 1, -1)
     samples_per_symbol = int(sampling_freq_hz / symbol_rate)
