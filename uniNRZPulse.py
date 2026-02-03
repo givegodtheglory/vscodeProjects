@@ -8,7 +8,7 @@ from scipy.signal import welch
 n_bits = 1                   # Single pulse
 symbolRate = 1               # 1 symbol per second (makes time axis easy to read)
 samplingFreqHz = 100000         # High enough to see the shapes
-alpha = 0.5                  # Rolloff
+alpha = 0.35                  # Rolloff
 BT = 0.3                     # Gaussian Bandwidth-Time
 span = 6                     # Filter span
 
@@ -31,21 +31,49 @@ signals = {
 }
 
 # --- 3. Compute FFT (Spectrum of Single Pulse) ---
-
-y = signals["Unipolar NRZ"]
+carrierFrequencyHz = 0
+carrier = 1*np.cos(2 * np.pi * carrierFrequencyHz * t)
+y = signals["Unipolar NRZ"]*carrier
 fftMagPulse = np.abs(fft(y)*1/samplingFreqHz) #normalized fft
 fftMagPulse = fftshift(fftMagPulse)
 pulsePSD = fftMagPulse**2
 freqs = fftfreq(len(y), 1/samplingFreqHz)
 freqs = fftshift(freqs)
 
-data_x = [t-5,freqs]
-data_y = [y,pulsePSD]
+#data_x = [t-5,freqs]
+#data_y = [y,10*np.log10(pulsePSD)]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+data_x = [freqs]
+data_y = [10*np.log10(pulsePSD)]
+
 
 # 3. Define Attributes Lists (Order matches data_x/data_y)
-my_titles   = ["Unipolar NRZ Pulse Time Domain", "Unipolar NRZ Pulse PSD"]
+#my_titles   = ["Unipolar NRZ Pulse Time Domain", "Unipolar NRZ Pulse PSD"]
+my_titles   = ["Unipolar NRZ Pulse PSD"]
 my_legends  = []
-my_xtitles  = ["Time (ms)", "Frequency (Hz)"]
+#my_xtitles  = ["Time (ms)", "Frequency (Hz)"]
+my_xtitles  = ["Frequency (Hz)"]
 my_ytitles  = ["Voltage (V)", "Magnitude"]
 my_colors   = [CHALK_WHITE]
 my_styles   = ['-']  # <--- Styles: Solid, Dashed, Dotted
@@ -55,15 +83,18 @@ my_styles   = ['-']  # <--- Styles: Solid, Dashed, Dotted
 figures = auto_organize(
     data_x, 
     data_y, 
-    layout=[[1,1]],             
+    layout=[[1]],             
     titles=my_titles,
     xtitles=my_xtitles,
-    xlims=[[(0,3),(-25,25)]],
+    xlims=[[(-100,100)]],
+    ylims=[[(-100,1)]],
     ytitles=my_ytitles,
     legend_labels=my_legends,
     colors=my_colors,
     linestyles=my_styles       # <--- Passing the styles list
 )
 
+
 # 5. Plot
-plot_flex(figures, fileName="testsssssssssssssssssssssssss.png")
+plot_flex(figures, fileName="trash/unipolarNRZPulsePSDShowingSideBands3.png")
+
