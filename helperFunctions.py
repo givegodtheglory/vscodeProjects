@@ -557,81 +557,89 @@ def get_gaussian_filter_unit_amplitude(time_vector, bt_product, samples_per_symb
         h = h / np.max(np.abs(h))
         
     return h
-
-def generate_pulse_train(pulse_type, bits, symbol_rate, alpha, span, BT, sampling_freq_hz, truncate_tails=True, return_pulse_shape=False, debug_mode=False):
+def generate_pulse_train(pulse_type, bits, symbol_rate, alpha, span, BT, sampling_freq_hz, 
+                         truncate_tails=True, return_pulse_shape=False, debug_mode=False, 
+                         external_t=None):
     """
-    Generates a pulse train. 
+    Generates a pulse train based on specified modulation and pulse shaping parameters.
     
     Args:
-        truncate_tails (bool): If True, cuts the start/end filter tails so the output length 
-                               is EXACTLY (num_symbols * samples_per_symbol). 
-                               Fixes 'operands could not be broadcast' errors.
+        pulse_type (str): Type of pulse ('Raised Cosine', 'Root Raised Cosine', 'Gaussian', 
+                          'Unipolar NRZ', 'Polar NRZ', 'Unipolar RZ', 'Manchester').
+        bits (np.ndarray): Input bit sequence (0s and 1s).
+        symbol_rate (float): Symbols per second (Baud rate).
+        alpha (float): Rolloff factor for RC/RRC or bandwidth parameter for Gaussian.
+        span (int): Filter span in symbols (used for shaped pulses).
+        BT (float): Bandwidth-Time product (specifically for Gaussian pulses).
+        sampling_freq_hz (float): System sampling frequency.
+        truncate_tails (bool): If True and external_t is None, cuts the start/end filter 
+                               tails so the output matches num_symbols * samples_per_symbol.
+        return_pulse_shape (bool): If True, returns the individual pulse shape used.
+        debug_mode (bool): If True, returns intermediate pulse traces for superposition.
+        external_t (np.ndarray, optional): A custom time vector to evaluate the pulses on. 
+                                           If provided, internal time generation and 
+                                           tail truncation are bypassed.
+
+    Returns:
+        pulse_train (np.ndarray): The generated baseband signal.
+        time_vector (np.ndarray): The time axis corresponding to the pulse train.
+        (Optional) debug_traces or single_pulse_shape/single_pulse_t based on flags.
     """
     
-    if not isinstance(bits,np.ndarray):
+    if not isinstance(bits, np.ndarray):
         raise ValueError("ENSURE BITS IS OF TYPE NUMPY ARRAY")
 
     # --- 1. COMMON SETUP ---
-    bipolar_symbols = np.where(bits == 1, 1, -1)
     samples_per_symbol = int(sampling_freq_hz / symbol_rate)
     symbol_period_sec = 1 / symbol_rate
     num_symbols = len(bits)
-    
-    # Calculate the exact expected length (without tails)
     expected_length = num_symbols * samples_per_symbol
     
     debug_traces = []
     single_pulse_shape = None
     single_pulse_t = None
     pulse_train = None
-    time_vector = None
 
     # =========================================================================
     # BRANCH A: SHAPED PULSES (RC, RRC, Gaussian)
-    # Uses Shift & Add, then truncates tails if requested
     # =========================================================================
     if pulse_type in ['Raised Cosine', 'Root Raised Cosine', 'Gaussian']:
         
-        # A1. Define Global Time Vector (WITH TAILS initially)
-        # We need the tails for the math to work, even if we cut them later.
-        tail_duration_sec = (span / 2) * symbol_period_sec
-        total_duration_sec = (num_symbols * symbol_period_sec) + (2 * tail_duration_sec)
+        # Bipolar symbols needed for scaling shaped pulses
+        bipolar_symbols = np.where(bits == 1, 1, -1)
         
-        t_start = -tail_duration_sec
-        t_end = t_start + total_duration_sec
-        total_samples = int(total_duration_sec * sampling_freq_hz)
+        # A1. Define/Use Time Vector
+        if external_t is not None:
+            time_vector = external_t.copy()
+        else:
+            tail_duration_sec = (span / 2) * symbol_period_sec
+            total_duration_sec = (num_symbols * symbol_period_sec) + (2 * tail_duration_sec)
+            t_start = -tail_duration_sec
+            t_end = t_start + total_duration_sec
+            total_samples = int(total_duration_sec * sampling_freq_hz)
+            time_vector = np.linspace(t_start, t_end, total_samples, endpoint=False)
         
-        time_vector = np.linspace(t_start, t_end, total_samples, endpoint=False)
         pulse_train = np.zeros_like(time_vector)
 
         # A2. Loop and Sum
         for i, symbol_val in enumerate(bipolar_symbols):
-            
-            # Shift time relative to current symbol center
             current_symbol_center_time = i * symbol_period_sec
             shifted_time_sec = time_vector - current_symbol_center_time
             normalized_shifted_time = shifted_time_sec / symbol_period_sec
             
-            # Compute Pulse
             if pulse_type == 'Raised Cosine':
                 pulse_shape = get_raised_cosine_filter_unit_amplitude(normalized_shifted_time, alpha, samples_per_symbol)
-            
             elif pulse_type == 'Root Raised Cosine':
-
                  pulse_shape = get_root_raised_cosine_filter_unit_amplitude(normalized_shifted_time, alpha, samples_per_symbol)
-            
             elif pulse_type == 'Gaussian':
                  pulse_shape = get_gaussian_filter_unit_amplitude(normalized_shifted_time, alpha, samples_per_symbol)
            
-            # Enforce Span
             mask = np.abs(normalized_shifted_time) <= (span / 2)
             pulse_shape[~mask] = 0
             
-            # Superposition
             scaled_pulse = symbol_val * pulse_shape
             pulse_train += scaled_pulse
             
-            # Debug Capture
             if i == 0:
                 single_pulse_shape = pulse_shape
                 single_pulse_t = normalized_shifted_time
@@ -639,69 +647,63 @@ def generate_pulse_train(pulse_type, bits, symbol_rate, alpha, span, BT, samplin
             if debug_mode:
                 debug_traces.append(scaled_pulse)
 
-        # A3. Truncate Tails (Crucial Fix)
-        if truncate_tails:
-            # We determine where the "Data" actually starts (t=0)
-            # Find the index closest to t=0
+        # A3. Truncate Tails
+        if truncate_tails and external_t is None:
             start_idx = np.argmin(np.abs(time_vector))
-            
-            # Slice exactly 'expected_length' samples from that point
-            # This drops the negative-time tail and the post-sequence tail
             if start_idx + expected_length <= len(pulse_train):
                 pulse_train = pulse_train[start_idx : start_idx + expected_length]
                 time_vector = time_vector[start_idx : start_idx + expected_length]
             else:
-                # Fallback if rounding errors make array slightly too short
                 pulse_train = pulse_train[start_idx:]
                 time_vector = time_vector[start_idx:]
             
             if debug_mode and len(debug_traces) > 0:
-                 # Truncate traces too
                  debug_traces = [d[start_idx : start_idx + expected_length] for d in debug_traces]
 
     # =========================================================================
     # BRANCH B: RECTANGULAR PULSES (NRZ, RZ, Manchester)
-    # Uses Simple Construction (No tails, always matches expected_length)
     # =========================================================================
     elif pulse_type in ['Unipolar NRZ', 'Polar NRZ', 'Unipolar RZ', 'Manchester']:
         
-        # B1. Create the Raw Pulse Stream
-        raw_pulse = np.zeros(expected_length)
+        target_len = len(external_t) if external_t is not None else expected_length
+        raw_pulse = np.zeros(target_len)
         
+        def fill_pulse(idx, length, val):
+            end_idx = min(idx + length, target_len)
+            if idx < target_len:
+                raw_pulse[idx : end_idx] = val
+
         if pulse_type == 'Unipolar NRZ':
-            raw_pulse = np.repeat(bits, samples_per_symbol)
+            temp = np.repeat(bits, samples_per_symbol)
+            raw_pulse[:min(len(temp), target_len)] = temp[:target_len]
             
         elif pulse_type == 'Polar NRZ':
-            raw_pulse = np.repeat(bipolar_symbols, samples_per_symbol)
+            # Moved bipolar_symbols here for the Polar NRZ case
+            bipolar_symbols = np.where(bits == 1, 1, -1)
+            temp = np.repeat(bipolar_symbols, samples_per_symbol)
+            raw_pulse[:min(len(temp), target_len)] = temp[:target_len]
             
         elif pulse_type == 'Unipolar RZ':
             half_sps = samples_per_symbol // 2
-            one_template = np.zeros(samples_per_symbol)
-            one_template[:half_sps] = 1 # High for first half
-            
             for k, bit in enumerate(bits):
                 if bit == 1:
-                    start = k * samples_per_symbol
-                    raw_pulse[start : start+samples_per_symbol] = one_template
+                    fill_pulse(k * samples_per_symbol, half_sps, 1)
 
         elif pulse_type == 'Manchester':
             half_sps = samples_per_symbol // 2
             for k, bit in enumerate(bits):
                 start = k * samples_per_symbol
                 mid = start + half_sps
-                end = start + samples_per_symbol
-                
-                if bit == 1: # 1 -> High-Low
-                    raw_pulse[start:mid] = 1
-                    raw_pulse[mid:end] = -1
-                else:        # 0 -> Low-High
-                    raw_pulse[start:mid] = -1
-                    raw_pulse[mid:end] = 1
+                if bit == 1: 
+                    fill_pulse(start, half_sps, 1)
+                    fill_pulse(mid, half_sps, -1)
+                else:
+                    fill_pulse(start, half_sps, -1)
+                    fill_pulse(mid, half_sps, 1)
 
         pulse_train = raw_pulse
-        time_vector = np.arange(len(pulse_train)) / sampling_freq_hz
+        time_vector = external_t if external_t is not None else (np.arange(len(pulse_train)) / sampling_freq_hz)
         
-        # Dummy return shapes
         single_pulse_shape = np.ones(samples_per_symbol)
         single_pulse_t = np.linspace(0, 1, samples_per_symbol)
 
