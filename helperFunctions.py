@@ -204,6 +204,22 @@ def plot_flex(figures_data, base_figsize=(10, 5), show=True, fileName="FatManPlo
 # =============================================================================
 
 def get_raised_cosine_filter_unit_amplitude(time_vector, alpha, samples_per_symbol):
+    """
+    Computes the time-domain impulse response of a Raised Cosine (RC) filter.
+
+    This filter is used to minimize Inter-Symbol Interference (ISI) by providing 
+    a transition band controlled by the roll-off factor. It handles the 
+    mathematical singularity at t = +/- 1/(2*alpha) using a limit approximation.
+
+    Args:
+        time_vector (np.ndarray): Normalized time points (t/Ts) for evaluation.
+        alpha (float): Roll-off factor (0 to 1). Defines excess bandwidth.
+        samples_per_symbol (int): Number of samples per symbol duration.
+
+    Returns:
+        np.ndarray: Filter coefficients with peak amplitude normalized to 1.
+    """
+
     if alpha == 0: alpha = 1e-8
     numerator = np.sinc(time_vector) * np.cos(np.pi * alpha * time_vector)
     denominator = 1 - (2 * alpha * time_vector)**2
@@ -215,6 +231,23 @@ def get_raised_cosine_filter_unit_amplitude(time_vector, alpha, samples_per_symb
     return h
 
 def get_root_raised_cosine_filter_unit_amplitude(time_vector, alpha, samples_per_symbol):
+    """
+    Computes the time-domain impulse response of a Root-Raised Cosine (RRC) filter.
+
+    The RRC filter is the square root of the RC filter in the frequency domain. 
+    It is typically used at both the transmitter and receiver to satisfy the 
+    Nyquist ISI criterion. This function handles singularities at t=0 and 
+    t = +/- 1/(4*alpha).
+
+    Args:
+        time_vector (np.ndarray): Normalized time points (t/Ts).
+        alpha (float): Roll-off factor (0 to 1).
+        samples_per_symbol (int): Number of samples per symbol.
+
+    Returns:
+        np.ndarray: RRC filter coefficients with unit amplitude.
+    """
+
     if alpha == 0: alpha = 1e-8
     term1 = np.sin(np.pi * time_vector * (1 - alpha))
     term2 = (4 * alpha * time_vector) * np.cos(np.pi * time_vector * (1 + alpha))
@@ -229,13 +262,25 @@ def get_root_raised_cosine_filter_unit_amplitude(time_vector, alpha, samples_per
     return h
 
 def get_gaussian_filter_unit_amplitude(time_vector, BT, samples_per_symbol):
+    """
+    Computes the time-domain impulse response of a Gaussian filter.
+
+    The Gaussian filter provides smooth phase transitions and a narrow power 
+    spectrum, commonly used in GMSK systems. The BT product determines the 
+    3dB bandwidth.
+
+    Args:
+        time_vector (np.ndarray): Normalized time points.
+        BT (float): Bandwidth-Time product. Smaller values increase smoothing.
+        samples_per_symbol (int): Number of samples per symbol.
+
+    Returns:
+        np.ndarray: Gaussian pulse shape coefficients.
+    """
+    
     # BT product determines the 3dB bandwidth
     c = -2 * np.pi**2 * (BT**2) / np.log(2)
     return np.exp(c * time_vector**2)
-
-# =============================================================================
-# 2. UNIFIED PULSE TRAIN GENERATOR
-# =============================================================================
 
 def generate_pulse_train(pulse_type, bits, symbol_rate, sampling_freq_hz, 
                          alpha=0.5, span=6, BT=0.3, 
@@ -243,6 +288,33 @@ def generate_pulse_train(pulse_type, bits, symbol_rate, sampling_freq_hz,
                          truncate_tails=True, return_pulse_shape=False, 
                          debug_mode=False, external_t=None):
     
+    """
+    Generates a baseband signal from a binary sequence using various pulse shapes.
+
+    Supported Pulse Types:
+    Shaped: 'Raised Cosine', 'Root Raised Cosine', 'Gaussian'
+    Line Codes: 'Unipolar NRZ', 'Polar NRZ', 'Unipolar RZ', 'Manchester'
+
+    Args:
+        pulse_type (str): Type of modulation or line code to apply.
+        bits (np.ndarray): Input binary sequence (0s and 1s).
+        symbol_rate (float): Frequency of symbols (Rs) in symbols per second.
+        sampling_freq_hz (float): System sampling rate (Fs) in Hz.
+        alpha (float): Roll-off factor for RC and RRC pulses. Default 0.5.
+        span (int): Filter truncation length in symbols. Default 6.
+        BT (float): Bandwidth-Time product for Gaussian pulses. Default 0.3.
+        delay_symbols (float): Global timing offset in symbols. Default 0.0.
+        prefix_symbols (int): Number of empty symbols to add before data.
+        suffix_symbols (int): Number of empty symbols to add after data.
+        truncate_tails (bool): If True, crops signal to exact symbol sequence length.
+        debug_mode (bool): If True, returns individual pulse traces for analysis.
+        external_t (np.ndarray): Optional pre-defined time vector to use.
+
+    Returns:
+        tuple: (pulse_train, time_vector) or (pulse_train, time_vector, debug_traces).
+    """
+
+
     if not isinstance(bits, np.ndarray):
         bits = np.array(bits)
 
@@ -328,4 +400,3 @@ def generate_pulse_train(pulse_type, bits, symbol_rate, sampling_freq_hz,
         pulse_train /= np.max(np.abs(pulse_train))
 
     return (pulse_train, time_vector, debug_traces) if debug_mode else (pulse_train, time_vector)
-
