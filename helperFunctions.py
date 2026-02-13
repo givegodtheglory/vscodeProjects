@@ -29,6 +29,33 @@ KHAKI_SAND        = '#c3b091'  # Neutral, organic trace
 PLASMA_BLUE       = '#6699cc'  # Soft glow blue
 URANIUM_GREEN     = '#39ff14'  # "Radioactive" bright neon green (Use sparingly)
 
+def apply_fatman_theme():
+    """Activates the M-42 Fat Man visual specification."""
+    plt.rcParams.update({
+        'figure.facecolor': AMMO_CRATE_GREEN,
+        'axes.facecolor': AMMO_CRATE_GREEN,
+        'savefig.facecolor': AMMO_CRATE_GREEN,
+        'font.family': 'monospace',
+        'font.weight': 'bold',
+        'font.size': 10,
+        'text.color': STENCIL_YELLOW,
+        'axes.labelcolor': STENCIL_YELLOW,
+        'axes.titlecolor': STENCIL_YELLOW,
+        'xtick.color': STENCIL_YELLOW,
+        'ytick.color': STENCIL_YELLOW,
+        'axes.grid': True,
+        'grid.color': ENGRAVED_BLACK,
+        'grid.linestyle': '-',
+        'grid.linewidth': 1.5,
+        'grid.alpha': 0.6,
+        'axes.edgecolor': STENCIL_YELLOW,
+        'axes.linewidth': 2.5,
+        'axes.spines.top': True,
+        'axes.spines.right': True,
+        'lines.linewidth': 3.0,
+        'axes.prop_cycle': cycler(color=[CHALK_WHITE, DANGER_RED, STENCIL_YELLOW])
+    })
+
 # --- 1. THE ORGANIZER ---
 def auto_organize(xs, ys, layout, 
                   titles=None, legend_labels=None, 
