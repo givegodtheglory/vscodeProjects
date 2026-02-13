@@ -357,7 +357,7 @@ def generate_pulse_train(pulse_type, bits, symbol_rate, sampling_freq_hz,
                  pulse_shape = get_gaussian_filter_unit_amplitude(norm_t, BT, samples_per_symbol)
            
             mask = np.abs(norm_t) <= (span / 2)
-            pulse_shape[~mask] = 0
+
             scaled_pulse = symbol_val * pulse_shape
             pulse_train += scaled_pulse
             
